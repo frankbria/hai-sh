@@ -283,7 +283,7 @@ Pass configuration through environment variables:
 ```python
 custom_env = os.environ.copy()
 custom_env["LOG_LEVEL"] = "DEBUG"
-custom_env["CONFIG_FILE"] = "/path/to/config.yml"
+custom_env["CONFIG_FILE"] = "/path/to/config.yaml"
 
 result = execute_command("./my_script.sh", env=custom_env)
 ```

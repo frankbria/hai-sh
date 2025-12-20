@@ -31,7 +31,7 @@ examples:
   hai --version
 
 configuration:
-  Config file: ~/.hai/config.yml
+  Config file: ~/.hai/config.yaml
   Shell integration: ~/.hai/bash_integration.sh
                     ~/.hai/zsh_integration.sh
 
@@ -120,7 +120,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         metavar="FILE",
-        help="path to config file (default: ~/.hai/config.yml)"
+        help="path to config file (default: ~/.hai/config.yaml)"
     )
 
     parser.add_argument(
@@ -168,7 +168,7 @@ def handle_config_error(error: str):
     print_error(
         "Configuration Error",
         error,
-        "Run 'hai --help' for configuration information or check ~/.hai/config.yml"
+        "Run 'hai --help' for configuration information or check ~/.hai/config.yaml"
     )
 
 
@@ -182,7 +182,7 @@ def handle_provider_error(error: str):
     print_error(
         "Provider Error",
         error,
-        "Check your API keys and provider configuration in ~/.hai/config.yml"
+        "Check your API keys and provider configuration in ~/.hai/config.yaml"
     )
 
 

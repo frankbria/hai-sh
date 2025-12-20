@@ -376,14 +376,14 @@ hai --help
 This creates:
 ```
 ~/.hai/
-├── config.yml              # Main configuration file
+├── config.yaml              # Main configuration file
 ├── bash_integration.sh     # Bash keyboard shortcut
 └── zsh_integration.sh      # Zsh keyboard shortcut
 ```
 
 ### Configure LLM Provider
 
-Edit `~/.hai/config.yml`:
+Edit `~/.hai/config.yaml`:
 
 ```yaml
 # Choose your default provider
@@ -433,7 +433,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 #### Option 2: Configuration File
 
-Edit `~/.hai/config.yml` and add your API keys directly (less secure):
+Edit `~/.hai/config.yaml` and add your API keys directly (less secure):
 
 ```yaml
 providers:
@@ -473,7 +473,7 @@ Ollama provides free, local LLM access:
 
 5. **Configure hai to use Ollama**:
    ```yaml
-   # In ~/.hai/config.yml
+   # In ~/.hai/config.yaml
    provider: "ollama"
 
    providers:
@@ -535,7 +535,7 @@ Expected: hai generates a command suggestion.
 ### 6. Verify Configuration
 
 ```bash
-cat ~/.hai/config.yml
+cat ~/.hai/config.yaml
 ```
 
 Ensure your provider settings are correct.
@@ -646,7 +646,7 @@ echo $OPENAI_API_KEY
 # If not set, add to ~/.bashrc
 export OPENAI_API_KEY="sk-..."
 
-# Or add to ~/.hai/config.yml
+# Or add to ~/.hai/config.yaml
 # providers:
 #   openai:
 #     api_key: "sk-..."
@@ -701,7 +701,7 @@ pip install hai-sh
 
 **Solution**:
 ```bash
-# Switch to faster model in ~/.hai/config.yml
+# Switch to faster model in ~/.hai/config.yaml
 providers:
   openai:
     model: "gpt-4o-mini"  # Faster than gpt-4
@@ -789,7 +789,7 @@ If you encounter issues not covered here:
    - Shell and version (`bash --version` or `zsh --version`)
    - Operating system
    - Error messages (full output)
-   - Configuration file (`~/.hai/config.yml`)
+   - Configuration file (`~/.hai/config.yaml`)
 
 4. **Enable Debug Mode**:
    ```bash

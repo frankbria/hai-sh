@@ -140,7 +140,7 @@ def test_handle_config_error():
         output = mock_stderr.getvalue()
         assert "Configuration Error" in output
         assert "Invalid YAML format" in output
-        assert "~/.hai/config.yml" in output
+        assert "~/.hai/config.yaml" in output
 
 
 @pytest.mark.unit
@@ -152,7 +152,7 @@ def test_handle_provider_error():
         output = mock_stderr.getvalue()
         assert "Provider Error" in output
         assert "API key missing" in output
-        assert "~/.hai/config.yml" in output
+        assert "~/.hai/config.yaml" in output
 
 
 @pytest.mark.unit
@@ -221,9 +221,9 @@ def test_parser_query_arguments():
 def test_parser_config_flag():
     """Test --config flag."""
     parser = create_parser()
-    args = parser.parse_args(['--config', '/path/to/config.yml', 'test', 'query'])
+    args = parser.parse_args(['--config', '/path/to/config.yaml', 'test', 'query'])
 
-    assert args.config == '/path/to/config.yml'
+    assert args.config == '/path/to/config.yaml'
     assert args.query == ['test', 'query']
 
 
@@ -252,13 +252,13 @@ def test_parser_multiple_flags():
     """Test multiple flags together."""
     parser = create_parser()
     args = parser.parse_args([
-        '--config', '/custom/config.yml',
+        '--config', '/custom/config.yaml',
         '--no-color',
         '--debug',
         'find', 'files'
     ])
 
-    assert args.config == '/custom/config.yml'
+    assert args.config == '/custom/config.yaml'
     assert args.no_color is True
     assert args.debug is True
     assert args.query == ['find', 'files']
