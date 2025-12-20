@@ -66,6 +66,16 @@ from hai_sh.executor import (
     get_shell_info,
     validate_shell_syntax,
 )
+from hai_sh.output import (
+    colorize_text,
+    format_result_for_display,
+    get_visible_length,
+    has_ansi_codes,
+    preserve_ansi_codes,
+    stream_output,
+    strip_ansi_codes,
+    truncate_output,
+)
 
 __version__ = "0.0.1"
 __all__ = [
@@ -117,4 +127,12 @@ __all__ = [
     "get_command_path",
     "validate_shell_syntax",
     "get_shell_info",
+    "has_ansi_codes",
+    "strip_ansi_codes",
+    "preserve_ansi_codes",
+    "truncate_output",
+    "format_result_for_display",
+    "stream_output",
+    "colorize_text",
+    "get_visible_length",
 ]
