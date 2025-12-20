@@ -21,6 +21,13 @@ from hai_sh.context import (
     get_safe_env_vars,
     is_sensitive_env_var,
 )
+from hai_sh.providers import (
+    BaseLLMProvider,
+    ProviderRegistry,
+    get_provider,
+    list_providers,
+    register_provider,
+)
 from hai_sh.init import (
     get_config_path,
     get_hai_dir,
@@ -47,4 +54,9 @@ __all__ = [
     "format_env_context",
     "is_sensitive_env_var",
     "get_safe_env_vars",
+    "BaseLLMProvider",
+    "ProviderRegistry",
+    "get_provider",
+    "register_provider",
+    "list_providers",
 ]
