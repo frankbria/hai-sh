@@ -6,7 +6,7 @@ A thin, context-aware wrapper around bash that enables natural language command 
 
 **Name:** hai (pronounce like "hi" - friendly shell assistant)
 
-**Invocation:** Ctrl+Shift+H or `@hai` prefix
+**Invocation:** Ctrl+X Ctrl+H or `@hai` prefix
 
 **Inspiration:** Similar agile versioning approach to [parallel-cc](https://github.com/frankbria/parallel-cc)
 
@@ -14,9 +14,9 @@ A thin, context-aware wrapper around bash that enables natural language command 
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| **Name** | hai | Short, friendly, easy to type. Ctrl+Shift+H matches the name. |
+| **Name** | hai | Short, friendly, easy to type. Ctrl+X Ctrl+H is memorable with the 'H'. |
 | **Integration** | Standalone Python wrapper | Easier to develop/debug, supports multiple shells (bash/zsh/fish) |
-| **Keyboard Shortcut** | Ctrl+Shift+H | No conflicts, aligns with name, Shift modifiers are safer |
+| **Keyboard Shortcut** | Ctrl+X Ctrl+H | Emacs-style, portable across terminals, no conflicts with terminal shortcuts |
 | **Memory Model** | Hybrid: per-session + per-directory + persistent preferences | Session context is clean, directory context is useful, preferences persist |
 | **Prompt Style** | Minimal/focused | Fast, works with smaller models, less token usage |
 | **Error Retries** | 2-3 attempts (v0.5), smart/adaptive (post-1.0) | Balanced between autonomy and not wasting time |
@@ -53,7 +53,7 @@ A thin, context-aware wrapper around bash that enables natural language command 
 ## User Stories
 
 ### Primary Use Case
-> "I'm working on a feature branch and realize I need to commit just one file to main. Instead of mentally translating this to git commands, I hit **Ctrl+Shift+H** and say: 'I know I'm working on a feature branch, but just one document I just created, can you commit that to main by itself?'
+> "I'm working on a feature branch and realize I need to commit just one file to main. Instead of mentally translating this to git commands, I hit **Ctrl+X Ctrl+H** and say: 'I know I'm working on a feature branch, but just one document I just created, can you commit that to main by itself?'
 >
 > The tool either asks for clarification OR (if obvious) executes: `git stash`, `git checkout main`, `git add <file>`, `git commit -m "..."`, `git checkout <feature-branch>`, `git stash pop`"
 
@@ -69,7 +69,7 @@ A thin, context-aware wrapper around bash that enables natural language command 
 **Goal:** Validate core concept is useful
 
 #### Core Functionality
-- [ ] **Invocation mechanism:** Ctrl+Shift+H or `@hai` prefix triggers LLM assistance
+- [ ] **Invocation mechanism:** Ctrl+X Ctrl+H or `@hai` prefix triggers LLM assistance
 - [ ] **Single LLM integration:** At least one provider working (OpenAI or Ollama)
 - [ ] **Basic execution:** Generated commands run in current shell context
 - [ ] **Dual-layer output:**
@@ -259,7 +259,7 @@ A thin, context-aware wrapper around bash that enables natural language command 
 ┌─────────────────────────────────────────────┐
 │           Bash/Zsh Shell                    │
 │  ┌──────────────────────────────────────┐   │
-│  │  Input Interceptor (Ctrl+Shift+H    │   │
+│  │  Input Interceptor (Ctrl+X Ctrl+H   │   │
 │  │  or @hai prefix)                     │   │
 │  └────────────┬─────────────────────────┘   │
 │               │                             │
