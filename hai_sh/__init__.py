@@ -5,6 +5,11 @@ A context-aware wrapper around bash that enables natural language
 command generation and execution via LLM assistance.
 """
 
+from hai_sh.config import (
+    ConfigError,
+    ConfigLoadError,
+    load_config,
+)
 from hai_sh.init import (
     get_config_path,
     get_hai_dir,
@@ -19,4 +24,7 @@ __all__ = [
     "get_config_path",
     "init_hai_directory",
     "verify_hai_directory",
+    "load_config",
+    "ConfigError",
+    "ConfigLoadError",
 ]
