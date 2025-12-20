@@ -57,7 +57,7 @@ Issues = "https://github.com/frankbria/hai-sh/issues"
 Documentation = "https://github.com/frankbria/hai-sh#readme"
 
 [tool.setuptools]
-packages = ["hai_sh"]
+packages = ["hai_sh", "hai_sh.providers", "hai_sh.integrations"]
 
 [tool.setuptools.package-data]
 hai_sh = [
