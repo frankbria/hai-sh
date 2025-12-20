@@ -242,9 +242,287 @@ The bash integration can work alongside other command-line tools:
 # Use with starship for enhanced prompts
 ```
 
-## Future Integrations
+---
 
-- **Zsh Integration**: Coming soon
+## Zsh Integration
+
+The zsh integration provides a keyboard shortcut to trigger hai-sh directly from your zsh command line, with full support for oh-my-zsh and other zsh frameworks.
+
+### Quick Start
+
+1. **Install hai-sh** (if not already installed):
+   ```zsh
+   pip install hai-sh
+   ```
+
+2. **Set up the integration**:
+   ```zsh
+   # Option 1: Automatic installation
+   source ~/.hai/zsh_integration.sh
+   _hai_install_integration
+
+   # Option 2: Manual installation
+   echo 'source ~/.hai/zsh_integration.sh' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+3. **Use the shortcut**:
+   - Type a command description: `show me large files`
+   - Press **Ctrl+X Ctrl+H**
+   - hai will generate a command for you!
+
+### Key Binding
+
+**Default**: `Ctrl+X Ctrl+H`
+
+The default binding is chosen for maximum compatibility across different terminals and zsh configurations (including oh-my-zsh).
+
+### Customizing the Key Binding
+
+You can customize the key binding by setting the `HAI_KEY_BINDING` environment variable before sourcing the integration script:
+
+```zsh
+# In your ~/.zshrc, BEFORE sourcing the integration:
+
+# Use Ctrl+H (may conflict with backspace in some terminals)
+export HAI_KEY_BINDING="^H"
+
+# Use Alt+H (Escape-h)
+export HAI_KEY_BINDING="^[h"
+
+# Use Ctrl+Space
+export HAI_KEY_BINDING="^@"
+
+# Then source the integration
+source ~/.hai/zsh_integration.sh
+```
+
+### ZLE Widget System
+
+The zsh integration uses ZLE (Zsh Line Editor) widgets:
+
+- **Widget**: `_hai_trigger_widget` - The core ZLE widget
+- **Buffer Access**: Uses `$BUFFER` and `$CURSOR` variables
+- **Registration**: `zle -N _hai_trigger_widget`
+- **Binding**: `bindkey "$HAI_KEY_BINDING" _hai_trigger_widget`
+
+### Common Key Binding Options
+
+| Binding | Environment Variable | Notes |
+|---------|---------------------|-------|
+| Ctrl+X Ctrl+H | `^X^H` | Default, most compatible |
+| Alt+H | `^[h` | Good alternative (Escape-h) |
+| Ctrl+H | `^H` | May conflict with backspace |
+| Ctrl+Space | `^@` | Alternative option |
+
+### Usage
+
+#### Method 1: Type and Trigger
+```zsh
+# Type your query
+find large files
+
+# Press Ctrl+X Ctrl+H
+# hai suggests: find ~ -type f -size +100M -exec du -h {} + | sort -rh | head -20
+```
+
+#### Method 2: Use @hai Prefix
+```zsh
+# Type with @hai prefix
+@hai show me my git status
+
+# Press Ctrl+X Ctrl+H
+# hai suggests: git status
+```
+
+#### Method 3: Empty Line Help
+```zsh
+# Press Ctrl+X Ctrl+H on empty line
+# Shows help and examples
+```
+
+### Features
+
+- **ZLE Integration**: Works seamlessly with Zsh Line Editor
+- **Automatic @hai Prefix**: If your query doesn't start with `@hai`, it will be automatically prepended
+- **Buffer Manipulation**: Processes and replaces the current command line buffer
+- **Error Handling**: Shows errors and preserves your original input
+- **Help on Empty Line**: Press the shortcut on an empty line for quick help
+- **oh-my-zsh Compatible**: Works with all oh-my-zsh themes and plugins
+
+### Helper Functions
+
+The integration provides several helper functions:
+
+```zsh
+# Test if the integration is working
+_hai_test_integration
+
+# Show the current key binding
+_hai_show_binding
+
+# Install integration to ~/.zshrc (with backup)
+_hai_install_integration
+
+# Remove integration from ~/.zshrc (with backup)
+_hai_uninstall_integration
+```
+
+### Quiet Mode
+
+To suppress the "hai-sh loaded" message on shell startup:
+
+```zsh
+# In your ~/.zshrc, BEFORE sourcing:
+export HAI_QUIET=1
+source ~/.hai/zsh_integration.sh
+```
+
+### oh-my-zsh Integration
+
+The hai-sh integration works perfectly with oh-my-zsh:
+
+```zsh
+# In your ~/.zshrc, after oh-my-zsh initialization:
+
+# oh-my-zsh configuration
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git docker kubectl)
+source $ZSH/oh-my-zsh.sh
+
+# hai-sh integration (after oh-my-zsh)
+source ~/.hai/zsh_integration.sh
+```
+
+### Troubleshooting
+
+#### Integration Not Working
+
+1. **Check if hai is installed**:
+   ```zsh
+   which hai
+   ```
+
+2. **Test the integration**:
+   ```zsh
+   _hai_test_integration
+   ```
+
+3. **Verify the widget is registered**:
+   ```zsh
+   zle -l | grep hai
+   ```
+
+4. **Check the key binding**:
+   ```zsh
+   _hai_show_binding
+   bindkey | grep hai
+   ```
+
+#### Conflicts with oh-my-zsh Plugins
+
+If you experience conflicts with oh-my-zsh plugins:
+
+1. **Load hai-sh after oh-my-zsh**:
+   ```zsh
+   source $ZSH/oh-my-zsh.sh  # First
+   source ~/.hai/zsh_integration.sh  # After
+   ```
+
+2. **Check for key binding conflicts**:
+   ```zsh
+   bindkey | grep "^X^H"
+   ```
+
+3. **Use a different key binding**:
+   ```zsh
+   export HAI_KEY_BINDING="^[h"  # Use Alt+H instead
+   ```
+
+#### Terminal-Specific Issues
+
+Some terminals may handle special key combinations differently:
+
+- **iTerm2/Terminal.app (macOS)**: Works with default settings
+- **GNOME Terminal**: Works with default settings
+- **Alacritty**: Works with default settings
+- **Kitty**: Works with default settings
+- **tmux/screen**: May require additional configuration for some key combinations
+
+### Examples
+
+```zsh
+# Example 1: Find files
+Type: find python files modified today
+Press: Ctrl+X Ctrl+H
+Result: find . -name "*.py" -mtime -1 -type f
+
+# Example 2: Git operations
+Type: @hai what changed in the last commit?
+Press: Ctrl+X Ctrl+H
+Result: git show HEAD
+
+# Example 3: System info
+Type: show disk usage
+Press: Ctrl+X Ctrl+H
+Result: df -h
+
+# Example 4: Docker commands
+Type: @hai list running containers
+Press: Ctrl+X Ctrl+H
+Result: docker ps
+```
+
+### Uninstallation
+
+To remove the zsh integration:
+
+```zsh
+# Automatic removal
+_hai_uninstall_integration
+
+# Manual removal
+# Edit ~/.zshrc and remove the line:
+# source ~/.hai/zsh_integration.sh
+```
+
+### Advanced Configuration
+
+#### Custom Widget Extensions
+
+You can extend the widget functionality by wrapping it:
+
+```zsh
+# In ~/.zshrc after sourcing integration
+_hai_trigger_widget_extended() {
+    # Custom pre-processing
+    # ...
+
+    # Call original widget
+    _hai_trigger_widget
+
+    # Custom post-processing
+    # ...
+}
+
+# Replace the widget
+zle -N _hai_trigger_widget_extended
+bindkey "$HAI_KEY_BINDING" _hai_trigger_widget_extended
+```
+
+#### Integration with Other ZLE Widgets
+
+The hai-sh integration can work alongside other ZLE widgets and plugins:
+
+```zsh
+# Use with zsh-autosuggestions
+# Use with zsh-syntax-highlighting
+# Use with zsh-history-substring-search
+# Use with fzf-tab
+```
+
+## Future Integrations
 - **Fish Integration**: Coming soon
 - **PowerShell Integration**: Coming soon
 
