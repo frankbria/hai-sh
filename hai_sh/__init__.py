@@ -53,6 +53,19 @@ from hai_sh.input_detector import (
     parse_hai_input,
     validate_query,
 )
+from hai_sh.executor import (
+    CommandExecutionError,
+    CommandInterruptedError,
+    CommandTimeoutError,
+    ExecutionResult,
+    check_command_exists,
+    execute_command,
+    execute_interactive,
+    execute_pipeline,
+    get_command_path,
+    get_shell_info,
+    validate_shell_syntax,
+)
 
 __version__ = "0.0.1"
 __all__ = [
@@ -93,4 +106,15 @@ __all__ = [
     "normalize_input",
     "get_prefix_variants",
     "validate_query",
+    "CommandExecutionError",
+    "CommandInterruptedError",
+    "CommandTimeoutError",
+    "ExecutionResult",
+    "execute_command",
+    "execute_interactive",
+    "execute_pipeline",
+    "check_command_exists",
+    "get_command_path",
+    "validate_shell_syntax",
+    "get_shell_info",
 ]
