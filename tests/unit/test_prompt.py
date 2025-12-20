@@ -458,11 +458,12 @@ def test_validate_command_dangerous_chmod_777():
 
 @pytest.mark.unit
 def test_validate_command_dangerous_system_path():
-    """Test validation rejects modifications to /etc."""
+    """Test validation rejects modifications to /etc (via output redirection check)."""
     is_safe, error = validate_command("echo 'test' > /etc/hosts")
 
     assert is_safe is False
-    assert "/etc/" in error.lower()
+    # Enhanced validation catches output redirection before checking paths
+    assert "redirection" in error.lower() or "/etc/" in error.lower()
 
 
 @pytest.mark.unit

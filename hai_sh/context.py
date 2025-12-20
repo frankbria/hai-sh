@@ -500,10 +500,11 @@ def get_env_context(include_path: bool = True, max_path_length: int = 500) -> di
 
 def is_sensitive_env_var(var_name: str) -> bool:
     """
-    Check if an environment variable name looks sensitive.
+    Check if an environment variable name looks sensitive (enhanced security).
 
     Identifies common patterns for sensitive variables like API keys,
-    passwords, tokens, secrets, etc.
+    passwords, tokens, secrets, etc. Uses comprehensive pattern matching
+    to catch edge cases and provider-specific naming conventions.
 
     Args:
         var_name: Environment variable name to check
@@ -514,23 +515,56 @@ def is_sensitive_env_var(var_name: str) -> bool:
     Example:
         >>> is_sensitive_env_var("API_KEY")
         True
+        >>> is_sensitive_env_var("OPENAI_SK")
+        True
         >>> is_sensitive_env_var("HOME")
         False
     """
     var_name_upper = var_name.upper()
 
-    # Common patterns for sensitive variables
+    # Exact matches (highly sensitive standalone names)
+    exact_sensitive = {
+        "PASSWORD", "SECRET", "TOKEN", "KEY",
+        "PASSWD", "PWD", "API", "SK",
+    }
+    if var_name_upper in exact_sensitive:
+        return True
+
+    # Comprehensive patterns for sensitive variables
     sensitive_patterns = [
-        "KEY",
-        "SECRET",
-        "PASSWORD",
-        "TOKEN",
-        "AUTH",
-        "CREDENTIAL",
-        "PRIVATE",
-        "API_KEY",
-        "ACCESS",
-        "SESSION",
+        # Generic credentials
+        "KEY", "SECRET", "PASSWORD", "PASSWD", "PWD",
+        "TOKEN", "AUTH", "CREDENTIAL", "PRIVATE",
+
+        # API-specific
+        "API_KEY", "APIKEY", "API_SECRET", "ACCESS_KEY",
+        "SECRET_KEY", "CLIENT_SECRET", "CLIENT_ID",
+
+        # OAuth/Session
+        "SESSION", "COOKIE", "CSRF", "JWT",
+        "BEARER", "ACCESS_TOKEN", "REFRESH_TOKEN",
+
+        # Database
+        "DB_PASSWORD", "DATABASE_URL", "CONNECTION_STRING",
+        "MONGODB_URI", "POSTGRES_PASSWORD", "MYSQL_PASSWORD",
+        "DB_PASS", "DATABASE_PASSWORD",
+
+        # Cloud Providers
+        "AWS_SECRET", "AWS_ACCESS_KEY_ID", "AWS_SESSION_TOKEN",
+        "AZURE_", "GCP_", "GOOGLE_APPLICATION_CREDENTIALS",
+        "DIGITALOCEAN_", "HEROKU_API_KEY",
+
+        # Service-specific (common third-party services)
+        "OPENAI", "ANTHROPIC", "SLACK_", "GITHUB_TOKEN",
+        "STRIPE_", "TWILIO_", "SENDGRID_",
+        "FIREBASE_", "SUPABASE_", "VERCEL_",
+
+        # SSH and encryption
+        "SSH_", "GPG_", "PGP_", "ENCRYPTION_",
+        "PRIVATE_KEY", "PASSPHRASE",
+
+        # Generic security markers
+        "CREDENTIALS", "SECURE_", "_SK", "_SECRET",
     ]
 
     # Check if any sensitive pattern is in the variable name

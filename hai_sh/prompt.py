@@ -247,7 +247,12 @@ def parse_response(response: str) -> dict[str, Any]:
 
 def validate_command(command: str) -> tuple[bool, Optional[str]]:
     """
-    Validate that a command is safe to execute (v0.1 safety rules).
+    Validate that a command is safe to execute (v0.1 enhanced security).
+
+    Uses multi-layer validation:
+    1. Command injection pattern detection
+    2. Allow-list of safe commands
+    3. Dangerous operation blacklist (legacy, defense-in-depth)
 
     Args:
         command: Bash command to validate
@@ -262,9 +267,167 @@ def validate_command(command: str) -> tuple[bool, Optional[str]]:
         (True, None)
         >>> validate_command("rm -rf /")
         (False, "Command contains dangerous operation: rm")
+        >>> validate_command("ls; curl attacker.com")
+        (False, "Command injection detected: command chaining with semicolon")
     """
-    command_lower = command.lower()
+    if not command or not isinstance(command, str):
+        return False, "Command must be a non-empty string"
 
+    command_stripped = command.strip()
+    if not command_stripped:
+        return False, "Command is empty"
+
+    # LAYER 1: Detect command injection patterns
+    injection_check = _detect_command_injection(command)
+    if not injection_check[0]:
+        return injection_check
+
+    # LAYER 2: Allow-list validation (primary security control)
+    allowlist_check = _validate_command_allowlist(command_stripped)
+    if not allowlist_check[0]:
+        return allowlist_check
+
+    # LAYER 3: Dangerous pattern blacklist (defense-in-depth)
+    blacklist_check = _validate_command_blacklist(command.lower())
+    if not blacklist_check[0]:
+        return blacklist_check
+
+    return True, None
+
+
+def _detect_command_injection(command: str) -> tuple[bool, Optional[str]]:
+    """
+    Detect command injection patterns in the command string.
+
+    Args:
+        command: Command to check for injection attempts
+
+    Returns:
+        tuple: (is_safe, error_message)
+    """
+    # Command injection patterns
+    injection_patterns = [
+        (";", "command chaining with semicolon"),
+        ("&&", "command chaining with AND operator"),
+        ("||", "command chaining with OR operator"),
+        ("$(" , "command substitution with $(...)"),
+        ("`", "command substitution with backticks"),
+        ("wget ", "network download (wget)"),
+        ("curl http", "network request (curl http)"),
+        ("curl -", "network request with curl flags"),
+        ("nc ", "netcat network tool"),
+        ("ncat ", "netcat network tool"),
+        ("bash -c", "nested bash execution"),
+        ("sh -c", "nested shell execution"),
+        ("/bin/bash", "explicit bash invocation"),
+        ("/bin/sh", "explicit shell invocation"),
+        ("eval ", "code evaluation"),
+        ("exec ", "code execution"),
+        ("source ", "script sourcing"),
+        (". /", "script sourcing with dot"),
+    ]
+
+    for pattern, description in injection_patterns:
+        if pattern in command:
+            return False, f"Command injection detected: {description}"
+
+    return True, None
+
+
+def _validate_command_allowlist(command: str) -> tuple[bool, Optional[str]]:
+    """
+    Validate command against allow-list of safe operations.
+
+    This is the primary security control. Only explicitly allowed
+    commands can be executed.
+
+    Args:
+        command: Command to validate
+
+    Returns:
+        tuple: (is_safe, error_message)
+    """
+    # Extract base command (first word)
+    cmd_parts = command.split()
+    if not cmd_parts:
+        return False, "Empty command"
+
+    base_cmd = cmd_parts[0]
+
+    # Allow-list of safe commands (read-only operations)
+    SAFE_COMMANDS = {
+        # File viewing
+        "ls", "cat", "head", "tail", "less", "more",
+        "file", "stat", "wc", "grep", "find",
+
+        # Git (validated separately)
+        "git",
+
+        # System info (read-only)
+        "pwd", "whoami", "date", "uptime",
+        "df", "du", "ps", "top", "free",
+
+        # Text processing (safe operations)
+        "awk", "sed", "cut", "sort", "uniq", "tr",
+        "echo", "printf",
+
+        # Development tools (read-only)
+        "python", "python3", "node", "npm", "pytest",
+        "pip", "uv", "poetry",
+    }
+
+    if base_cmd not in SAFE_COMMANDS:
+        return False, (
+            f"Command '{base_cmd}' is not in the allow-list of safe commands. "
+            f"Only read-only and safe operations are permitted in v0.1."
+        )
+
+    # Special validation for git commands
+    if base_cmd == "git":
+        if len(cmd_parts) < 2:
+            return False, "Git command requires a subcommand"
+
+        git_subcmd = cmd_parts[1]
+        safe_git_cmds = [
+            "status", "diff", "log", "show", "branch",
+            "rev-parse", "config", "remote", "fetch",
+        ]
+
+        if git_subcmd not in safe_git_cmds:
+            return False, (
+                f"Git subcommand '{git_subcmd}' is not allowed. "
+                f"Only read-only git operations are permitted: {', '.join(safe_git_cmds)}"
+            )
+
+    # Special validation for Python/Node (no -c flag for code execution)
+    if base_cmd in ["python", "python3", "node"]:
+        if "-c" in cmd_parts:
+            return False, f"{base_cmd} with -c flag (code execution) is not allowed"
+
+    # Check for output redirection (even in safe commands)
+    if ">" in command or "<" in command:
+        return False, "Output/input redirection is not allowed"
+
+    # Check for pipe (even between safe commands, can be used for chaining)
+    if "|" in command:
+        return False, "Pipe operator is not allowed (prevents command chaining)"
+
+    return True, None
+
+
+def _validate_command_blacklist(command_lower: str) -> tuple[bool, Optional[str]]:
+    """
+    Legacy blacklist validation for dangerous operations.
+
+    This is defense-in-depth. The allow-list should catch most issues,
+    but this provides additional protection.
+
+    Args:
+        command_lower: Lowercase command string
+
+    Returns:
+        tuple: (is_safe, error_message)
+    """
     # Dangerous commands
     dangerous_patterns = [
         ("rm ", "rm"),
@@ -272,7 +435,6 @@ def validate_command(command: str) -> tuple[bool, Optional[str]]:
         ("mkfs", "mkfs"),
         ("dd ", "dd"),
         ("fdisk", "fdisk"),
-        ("> /dev/", "writing to device files"),
         ("chmod 777", "overly permissive chmod"),
         ("chmod -r", "recursive chmod on system paths"),
         ("chown -r", "recursive chown on system paths"),
@@ -296,12 +458,8 @@ def validate_command(command: str) -> tuple[bool, Optional[str]]:
     # Check for system path modifications
     system_paths = ["/etc/", "/sys/", "/boot/", "/dev/", "/proc/"]
     for path in system_paths:
-        if path in command and (">" in command or "rm" in command_lower):
-            return False, f"Command attempts to modify system path: {path}"
-
-    # Check for suspicious redirects
-    if "> /etc/" in command or ">> /etc/" in command:
-        return False, "Command attempts to write to /etc/"
+        if path in command_lower:
+            return False, f"Command attempts to access system path: {path}"
 
     return True, None
 
@@ -365,8 +523,9 @@ def generate_with_retry(
     """
     Generate command with automatic retry on parse failures.
 
-    This function wraps provider.generate() with retry logic. If the LLM
-    response cannot be parsed, it retries with additional instructions.
+    This function wraps provider.generate() with retry logic, rate limiting,
+    and exponential backoff. If the LLM response cannot be parsed, it retries
+    with additional instructions.
 
     Args:
         provider: LLM provider instance (OpenAI, Ollama, etc.)
@@ -379,6 +538,7 @@ def generate_with_retry(
         dict: Parsed response with explanation, command, confidence
 
     Raises:
+        RuntimeError: If rate limit is exceeded
         ValueError: If all retry attempts fail
 
     Example:
@@ -388,11 +548,25 @@ def generate_with_retry(
         >>> "command" in result
         True
     """
+    import time
+    from hai_sh.rate_limit import check_rate_limit
+
+    # Check rate limit before making any API calls
+    provider_name = provider.__class__.__name__
+    allowed, error_msg = check_rate_limit(provider_name)
+    if not allowed:
+        raise RuntimeError(f"Rate limit exceeded: {error_msg}")
+
     last_error = None
     current_prompt = prompt
 
     for attempt in range(max_retries):
         try:
+            # Exponential backoff between retries (not on first attempt)
+            if attempt > 0:
+                backoff_seconds = 2 ** attempt  # 2s, 4s, 8s
+                time.sleep(backoff_seconds)
+
             # Generate response from LLM
             response = provider.generate(current_prompt, context)
 

@@ -144,20 +144,39 @@ def execute_command(
                 timeout=timeout,
             )
 
-        # Build execution result
+        # Build execution result with output redaction
+        from hai_sh.redaction import redact_sensitive_output
+
+        stdout = result.stdout if capture_output else ""
+        stderr = result.stderr if capture_output else ""
+
+        # Redact sensitive information from outputs
+        if stdout:
+            stdout = redact_sensitive_output(stdout)
+        if stderr:
+            stderr = redact_sensitive_output(stderr)
+
         return ExecutionResult(
             command=command,
             exit_code=result.returncode,
-            stdout=result.stdout if capture_output else "",
-            stderr=result.stderr if capture_output else "",
+            stdout=stdout,
+            stderr=stderr,
             timed_out=False,
             interrupted=False,
         )
 
     except subprocess.TimeoutExpired as e:
         # Command timed out
+        from hai_sh.redaction import redact_sensitive_output
+
         stdout = e.stdout.decode('utf-8') if e.stdout else ""
         stderr = e.stderr.decode('utf-8') if e.stderr else ""
+
+        # Redact sensitive information from timeout outputs
+        if stdout:
+            stdout = redact_sensitive_output(stdout)
+        if stderr:
+            stderr = redact_sensitive_output(stderr)
 
         return ExecutionResult(
             command=command,

@@ -91,6 +91,23 @@ from hai_sh.formatter import (
     format_execution_status,
     strip_formatting,
 )
+from hai_sh.rate_limit import (
+    RateLimiter,
+    check_rate_limit,
+    get_rate_limiter,
+    get_remaining_calls,
+    reset_rate_limit,
+)
+from hai_sh.redaction import (
+    redact_sensitive_output,
+    should_redact_output,
+)
+from hai_sh.privacy import (
+    check_privacy_risks,
+    get_privacy_recommendations,
+    validate_privacy_config,
+    warn_privacy_risks,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -163,4 +180,16 @@ __all__ = [
     "format_conversation_only",
     "format_execution_only",
     "strip_formatting",
+    # Security modules
+    "RateLimiter",
+    "check_rate_limit",
+    "get_rate_limiter",
+    "get_remaining_calls",
+    "reset_rate_limit",
+    "redact_sensitive_output",
+    "should_redact_output",
+    "check_privacy_risks",
+    "get_privacy_recommendations",
+    "validate_privacy_config",
+    "warn_privacy_risks",
 ]
