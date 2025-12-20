@@ -6,7 +6,8 @@ Complete guide for installing and setting up hai-sh, your AI-powered terminal as
 
 - [Prerequisites](#prerequisites)
 - [Installation Methods](#installation-methods)
-  - [Install via pip (Recommended)](#install-via-pip-recommended)
+  - [Install via pipx (Recommended for CLI Tools)](#install-via-pipx-recommended-for-cli-tools)
+  - [Install via pip (Alternative Method)](#install-via-pip-alternative-method)
   - [Install for Development](#install-for-development)
 - [Shell Integration Setup](#shell-integration-setup)
   - [Bash Setup](#bash-setup)
