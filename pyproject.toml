@@ -46,7 +46,7 @@ dev = [
 ]
 
 [project.scripts]
-hai-sh = "hai_sh.__main__:main"
+hai = "hai_sh.__main__:main"
 
 [project.urls]
 Repository = "https://github.com/frankbria/hai-sh"
