@@ -92,7 +92,7 @@ from hai_sh.formatter import (
     strip_formatting,
 )
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 __all__ = [
     "__version__",
     "get_hai_dir",

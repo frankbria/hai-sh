@@ -166,7 +166,7 @@ hai --version
 
 You should see output like:
 ```
-hai version 0.0.1
+hai version 0.1.0
 ```
 
 #### 3. Check Installation Location
@@ -496,7 +496,7 @@ hai --version
 
 Expected output:
 ```
-hai version 0.0.1
+hai version 0.1.0
 ```
 
 ### 2. Test Help System
