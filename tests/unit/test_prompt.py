@@ -12,6 +12,9 @@ from hai_sh.prompt import (
     parse_response,
     validate_command,
     format_command_output,
+    generate_with_retry,
+    extract_fallback_response,
+    validate_response_fields,
     _format_context,
 )
 
@@ -566,3 +569,296 @@ def test_format_command_output_low_confidence():
 
     # Low confidence should use red color code
     assert "\033[91m" in output
+
+
+# ============================================================================
+# Retry Logic Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_generate_with_retry_success_first_attempt():
+    """Test retry logic succeeds on first attempt."""
+    from unittest.mock import Mock
+
+    # Create mock provider
+    provider = Mock()
+    provider.generate.return_value = json.dumps({
+        "explanation": "List files",
+        "command": "ls -la",
+        "confidence": 90
+    })
+
+    result = generate_with_retry(provider, "list files")
+
+    assert result["command"] == "ls -la"
+    assert result["confidence"] == 90
+    assert provider.generate.call_count == 1
+
+
+@pytest.mark.unit
+def test_generate_with_retry_success_after_retry():
+    """Test retry logic succeeds after initial failure."""
+    from unittest.mock import Mock
+
+    provider = Mock()
+    # First call returns invalid JSON, second call succeeds
+    provider.generate.side_effect = [
+        "This is not valid JSON",
+        json.dumps({
+            "explanation": "List files",
+            "command": "ls -la",
+            "confidence": 90
+        })
+    ]
+
+    result = generate_with_retry(provider, "list files", max_retries=3)
+
+    assert result["command"] == "ls -la"
+    assert provider.generate.call_count == 2
+
+
+@pytest.mark.unit
+def test_generate_with_retry_adds_safety_warning():
+    """Test that retry logic adds safety warning for dangerous commands."""
+    from unittest.mock import Mock
+
+    provider = Mock()
+    provider.generate.return_value = json.dumps({
+        "explanation": "Remove files",
+        "command": "rm -rf /tmp/test",
+        "confidence": 90
+    })
+
+    result = generate_with_retry(provider, "delete files")
+
+    assert "safety_warning" in result
+    assert "rm" in result["safety_warning"].lower()
+
+
+@pytest.mark.unit
+def test_generate_with_retry_uses_fallback():
+    """Test that retry logic uses fallback extraction on final attempt."""
+    from unittest.mock import Mock
+
+    provider = Mock()
+    # All attempts return malformed response with extractable command
+    provider.generate.return_value = "You can use `ls -la` to list files."
+
+    result = generate_with_retry(provider, "list files", max_retries=3)
+
+    assert result["command"] == "ls -la"
+    assert result["confidence"] == 50  # Fallback has lower confidence
+
+
+@pytest.mark.unit
+def test_generate_with_retry_all_attempts_fail():
+    """Test that retry logic raises error after all attempts fail."""
+    from unittest.mock import Mock
+
+    provider = Mock()
+    provider.generate.return_value = "This response has no command or valid JSON"
+
+    with pytest.raises(ValueError, match="Failed to generate valid response"):
+        generate_with_retry(provider, "test", max_retries=2)
+
+    assert provider.generate.call_count == 2
+
+
+@pytest.mark.unit
+def test_generate_with_retry_custom_suffix():
+    """Test retry logic with custom retry prompt suffix."""
+    from unittest.mock import Mock
+
+    provider = Mock()
+    provider.generate.side_effect = [
+        "Invalid",
+        json.dumps({"explanation": "Test", "command": "ls", "confidence": 90})
+    ]
+
+    custom_suffix = "\n\nIMPORTANT: Use JSON format!"
+    result = generate_with_retry(provider, "test", retry_prompt_suffix=custom_suffix)
+
+    # Second call should have the suffix
+    assert provider.generate.call_args_list[1][0][0].endswith(custom_suffix)
+    assert result["command"] == "ls"
+
+
+# ============================================================================
+# Fallback Extraction Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_extract_fallback_backticks():
+    """Test fallback extraction from backticks."""
+    response = "You can use `ls -la` to list files."
+
+    result = extract_fallback_response(response)
+
+    assert result is not None
+    assert result["command"] == "ls -la"
+    assert result["confidence"] == 50
+
+
+@pytest.mark.unit
+def test_extract_fallback_code_block():
+    """Test fallback extraction from code block."""
+    response = """Here's the command:
+```
+find . -name '*.py'
+```
+This will find Python files."""
+
+    result = extract_fallback_response(response)
+
+    assert result is not None
+    assert result["command"] == "find . -name '*.py'"
+
+
+@pytest.mark.unit
+def test_extract_fallback_command_prefix():
+    """Test fallback extraction from 'Command:' prefix."""
+    response = "Command: git status\nThis shows the status."
+
+    result = extract_fallback_response(response)
+
+    assert result is not None
+    assert result["command"] == "git status"
+
+
+@pytest.mark.unit
+def test_extract_fallback_case_insensitive():
+    """Test fallback extraction is case-insensitive for 'command:'."""
+    response = "command: pwd"
+
+    result = extract_fallback_response(response)
+
+    assert result is not None
+    assert result["command"] == "pwd"
+
+
+@pytest.mark.unit
+def test_extract_fallback_extracts_explanation():
+    """Test fallback extraction includes explanation."""
+    response = "This lists all files. You can use `ls -la` for details."
+
+    result = extract_fallback_response(response)
+
+    assert result is not None
+    assert result["explanation"] == "This lists all files."
+
+
+@pytest.mark.unit
+def test_extract_fallback_no_command():
+    """Test fallback extraction returns None when no command found."""
+    response = "This response has no extractable command."
+
+    result = extract_fallback_response(response)
+
+    assert result is None
+
+
+@pytest.mark.unit
+def test_extract_fallback_prefers_backticks():
+    """Test fallback extraction prefers backticks over other patterns."""
+    response = "Command: wrong\nUse `ls -la` instead."
+
+    result = extract_fallback_response(response)
+
+    # Should extract from backticks, not Command: prefix
+    assert result["command"] == "ls -la"
+
+
+# ============================================================================
+# Response Field Validation Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_validate_response_fields_valid():
+    """Test validation succeeds for valid response."""
+    response = {
+        "explanation": "Test command",
+        "command": "ls -la",
+        "confidence": 90
+    }
+
+    is_valid, error = validate_response_fields(response)
+
+    assert is_valid is True
+    assert error is None
+
+
+@pytest.mark.unit
+def test_validate_response_fields_missing_explanation():
+    """Test validation fails when explanation is missing."""
+    response = {
+        "command": "ls",
+        "confidence": 90
+    }
+
+    is_valid, error = validate_response_fields(response)
+
+    assert is_valid is False
+    assert "explanation" in error.lower()
+
+
+@pytest.mark.unit
+def test_validate_response_fields_empty_explanation():
+    """Test validation fails when explanation is empty."""
+    response = {
+        "explanation": "   ",
+        "command": "ls",
+        "confidence": 90
+    }
+
+    is_valid, error = validate_response_fields(response)
+
+    assert is_valid is False
+    assert "explanation" in error.lower()
+
+
+@pytest.mark.unit
+def test_validate_response_fields_empty_command():
+    """Test validation fails when command is empty."""
+    response = {
+        "explanation": "Test",
+        "command": "",
+        "confidence": 90
+    }
+
+    is_valid, error = validate_response_fields(response)
+
+    assert is_valid is False
+    assert "command" in error.lower()
+
+
+@pytest.mark.unit
+def test_validate_response_fields_invalid_confidence_type():
+    """Test validation fails when confidence is not a number."""
+    response = {
+        "explanation": "Test",
+        "command": "ls",
+        "confidence": "high"
+    }
+
+    is_valid, error = validate_response_fields(response)
+
+    assert is_valid is False
+    assert "confidence" in error.lower()
+
+
+@pytest.mark.unit
+def test_validate_response_fields_confidence_out_of_range():
+    """Test validation fails when confidence is out of range."""
+    response = {
+        "explanation": "Test",
+        "command": "ls",
+        "confidence": 150
+    }
+
+    is_valid, error = validate_response_fields(response)
+
+    assert is_valid is False
+    assert "0" in error and "100" in error

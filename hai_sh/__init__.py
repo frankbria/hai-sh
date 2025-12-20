@@ -38,9 +38,12 @@ from hai_sh.init import (
 )
 from hai_sh.prompt import (
     build_system_prompt,
+    extract_fallback_response,
     format_command_output,
+    generate_with_retry,
     parse_response,
     validate_command,
+    validate_response_fields,
 )
 
 __version__ = "0.0.1"
@@ -73,4 +76,7 @@ __all__ = [
     "parse_response",
     "validate_command",
     "format_command_output",
+    "generate_with_retry",
+    "extract_fallback_response",
+    "validate_response_fields",
 ]

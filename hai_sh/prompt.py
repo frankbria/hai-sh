@@ -353,3 +353,173 @@ def format_command_output(
     output.append(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}\n")
 
     return "\n".join(output)
+
+
+def generate_with_retry(
+    provider: Any,
+    prompt: str,
+    context: Optional[dict[str, Any]] = None,
+    max_retries: int = 3,
+    retry_prompt_suffix: str = "\n\nPlease respond with valid JSON only."
+) -> dict[str, Any]:
+    """
+    Generate command with automatic retry on parse failures.
+
+    This function wraps provider.generate() with retry logic. If the LLM
+    response cannot be parsed, it retries with additional instructions.
+
+    Args:
+        provider: LLM provider instance (OpenAI, Ollama, etc.)
+        prompt: User's natural language request
+        context: Optional context dictionary
+        max_retries: Maximum number of retry attempts (default: 3)
+        retry_prompt_suffix: Additional instruction added on retry
+
+    Returns:
+        dict: Parsed response with explanation, command, confidence
+
+    Raises:
+        ValueError: If all retry attempts fail
+
+    Example:
+        >>> from hai_sh.providers import OllamaProvider
+        >>> provider = OllamaProvider({"model": "llama3.2"})
+        >>> result = generate_with_retry(provider, "list files")
+        >>> "command" in result
+        True
+    """
+    last_error = None
+    current_prompt = prompt
+
+    for attempt in range(max_retries):
+        try:
+            # Generate response from LLM
+            response = provider.generate(current_prompt, context)
+
+            # Try to parse the response
+            parsed = parse_response(response)
+
+            # Validate the command is safe
+            is_safe, safety_error = validate_command(parsed["command"])
+            if not is_safe:
+                # Add safety context to the command response
+                parsed["safety_warning"] = safety_error
+
+            return parsed
+
+        except ValueError as e:
+            last_error = e
+
+            # On last attempt, try fallback extraction
+            if attempt == max_retries - 1:
+                try:
+                    fallback = extract_fallback_response(response)
+                    if fallback:
+                        return fallback
+                except Exception:
+                    pass  # Fallback also failed, will raise original error
+
+            # Add retry instruction for next attempt
+            if attempt < max_retries - 1:
+                current_prompt = prompt + retry_prompt_suffix
+
+    # All retries failed
+    raise ValueError(
+        f"Failed to generate valid response after {max_retries} attempts. "
+        f"Last error: {last_error}"
+    )
+
+
+def extract_fallback_response(response: str) -> Optional[dict[str, Any]]:
+    """
+    Attempt to extract command information from malformed responses.
+
+    This is a best-effort fallback for when strict JSON parsing fails.
+    It tries to extract command and explanation from common patterns.
+
+    Args:
+        response: Raw LLM response that failed JSON parsing
+
+    Returns:
+        dict: Partial response if extraction succeeds, None otherwise
+
+    Example:
+        >>> response = "I'll list files: `ls -la`"
+        >>> result = extract_fallback_response(response)
+        >>> result is not None
+        True
+    """
+    # Try to find command in backticks
+    command = None
+    explanation = None
+
+    # Pattern 1: Command in backticks (inline code)
+    import re
+    backtick_match = re.search(r'`([^`]+)`', response)
+    if backtick_match:
+        command = backtick_match.group(1).strip()
+
+    # Pattern 2: Command in code block without language specifier
+    code_block_match = re.search(r'```(?:\w+)?\s*\n?(.+?)\n?\s*```', response, re.DOTALL)
+    if code_block_match and not command:
+        command = code_block_match.group(1).strip()
+
+    # Pattern 3: Command after "command:" or "Command:"
+    command_match = re.search(r'[Cc]ommand:\s*(.+?)(?:\n|$)', response)
+    if command_match and not command:
+        command = command_match.group(1).strip()
+
+    # Extract explanation (first sentence or paragraph)
+    sentences = response.split('.')
+    if sentences:
+        explanation = sentences[0].strip() + '.'
+
+    # Only return if we found a command
+    if command:
+        return {
+            "explanation": explanation or "Command extracted from response",
+            "command": command,
+            "confidence": 50  # Lower confidence for fallback extraction
+        }
+
+    return None
+
+
+def validate_response_fields(response: dict[str, Any]) -> tuple[bool, Optional[str]]:
+    """
+    Validate that a parsed response has all required fields with valid values.
+
+    Args:
+        response: Parsed response dictionary
+
+    Returns:
+        tuple: (is_valid, error_message)
+            - is_valid: True if all fields are valid
+            - error_message: None if valid, otherwise description of problem
+
+    Example:
+        >>> response = {"explanation": "test", "command": "ls", "confidence": 90}
+        >>> is_valid, error = validate_response_fields(response)
+        >>> is_valid
+        True
+    """
+    # Check required fields exist
+    required = ["explanation", "command", "confidence"]
+    missing = [f for f in required if f not in response]
+    if missing:
+        return False, f"Missing required fields: {', '.join(missing)}"
+
+    # Check field types and values
+    if not isinstance(response["explanation"], str) or not response["explanation"].strip():
+        return False, "Explanation must be a non-empty string"
+
+    if not isinstance(response["command"], str) or not response["command"].strip():
+        return False, "Command must be a non-empty string"
+
+    if not isinstance(response["confidence"], (int, float)):
+        return False, "Confidence must be a number"
+
+    if not (0 <= response["confidence"] <= 100):
+        return False, "Confidence must be between 0 and 100"
+
+    return True, None
