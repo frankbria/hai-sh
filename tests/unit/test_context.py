@@ -4,12 +4,19 @@ Tests for context collection functionality.
 
 import os
 import stat
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hai_sh.context import format_cwd_context, get_cwd_context, get_directory_info
+from hai_sh.context import (
+    format_cwd_context,
+    format_git_context,
+    get_cwd_context,
+    get_directory_info,
+    get_git_context,
+)
 
 
 @pytest.mark.unit
@@ -346,3 +353,303 @@ def test_get_cwd_context_integration(tmp_path, monkeypatch):
     formatted = format_cwd_context(context)
     assert str(test_dir) in formatted
     assert "5" in formatted
+
+
+# ============================================================================
+# Git Context Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_get_git_context_in_repo(sample_git_repo, monkeypatch):
+    """Test git context detection in a git repository."""
+    monkeypatch.chdir(sample_git_repo)
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is True
+    assert context["branch"] is not None
+    assert context["error"] is None
+
+
+@pytest.mark.unit
+def test_get_git_context_not_in_repo(tmp_path, monkeypatch):
+    """Test git context detection outside a git repository."""
+    # Use a non-git directory
+    test_dir = tmp_path / "not_a_repo"
+    test_dir.mkdir()
+    monkeypatch.chdir(test_dir)
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is False
+    assert context["branch"] is None
+
+
+@pytest.mark.unit
+def test_get_git_context_clean_repo(sample_git_repo, monkeypatch):
+    """Test git context in clean repository."""
+    monkeypatch.chdir(sample_git_repo)
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is True
+    assert context["is_clean"] is True
+    assert context["has_staged"] is False
+    assert context["has_unstaged"] is False
+    assert context["has_untracked"] is False
+
+
+@pytest.mark.unit
+def test_get_git_context_dirty_repo(sample_git_repo, monkeypatch):
+    """Test git context in dirty repository with uncommitted changes."""
+    monkeypatch.chdir(sample_git_repo)
+
+    # Create an untracked file
+    (sample_git_repo / "untracked.txt").write_text("new file")
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is True
+    assert context["is_clean"] is False
+    assert context["has_untracked"] is True
+
+
+@pytest.mark.unit
+def test_get_git_context_staged_changes(sample_git_repo, monkeypatch):
+    """Test git context with staged changes."""
+    monkeypatch.chdir(sample_git_repo)
+
+    # Create and stage a file
+    new_file = sample_git_repo / "staged.txt"
+    new_file.write_text("staged content")
+
+    subprocess.run(["git", "add", "staged.txt"], cwd=sample_git_repo, check=True)
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is True
+    assert context["is_clean"] is False
+    assert context["has_staged"] is True
+
+
+@pytest.mark.unit
+def test_get_git_context_unstaged_changes(sample_git_repo, monkeypatch):
+    """Test git context with unstaged changes."""
+    monkeypatch.chdir(sample_git_repo)
+
+    # Modify an existing file
+    test_file = sample_git_repo / "test.txt"
+    test_file.write_text("modified content")
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is True
+    assert context["is_clean"] is False
+    assert context["has_unstaged"] is True
+
+
+@pytest.mark.unit
+def test_get_git_context_branch_name(sample_git_repo, monkeypatch):
+    """Test git context returns correct branch name."""
+    monkeypatch.chdir(sample_git_repo)
+
+    context = get_git_context()
+
+    assert context["branch"] is not None
+    # Default branch should be main or master
+    assert context["branch"] in ["main", "master"]
+
+
+@pytest.mark.unit
+def test_get_git_context_commit_hash(sample_git_repo, monkeypatch):
+    """Test git context returns commit hash."""
+    monkeypatch.chdir(sample_git_repo)
+
+    context = get_git_context()
+
+    assert context["commit_hash"] is not None
+    # Short hash should be 7 characters
+    assert len(context["commit_hash"]) == 7
+
+
+@pytest.mark.unit
+def test_get_git_context_with_directory_arg(sample_git_repo):
+    """Test git context with explicit directory argument."""
+    context = get_git_context(directory=str(sample_git_repo))
+
+    assert context["is_git_repo"] is True
+    assert context["branch"] is not None
+
+
+@pytest.mark.unit
+def test_get_git_context_git_not_installed(monkeypatch):
+    """Test git context when git is not installed."""
+    # Mock subprocess.run to raise FileNotFoundError
+    def mock_run(*args, **kwargs):
+        raise FileNotFoundError("git not found")
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is False
+    assert "not installed" in context["error"]
+
+
+@pytest.mark.unit
+def test_get_git_context_git_timeout(monkeypatch):
+    """Test git context when git command times out."""
+    # Mock subprocess.run to raise TimeoutExpired
+    def mock_run(*args, **kwargs):
+        import subprocess
+
+        raise subprocess.TimeoutExpired("git", 5)
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    context = get_git_context()
+
+    assert context["is_git_repo"] is False
+    assert "timed out" in context["error"].lower()
+
+
+@pytest.mark.unit
+def test_get_git_context_os_error(monkeypatch, sample_git_repo):
+    """Test git context when OS error occurs."""
+    monkeypatch.chdir(sample_git_repo)
+
+    # Mock subprocess.run to raise OSError after version check
+    call_count = {"count": 0}
+
+    original_run = subprocess.run
+
+    def mock_run(*args, **kwargs):
+        call_count["count"] += 1
+        # Let version check pass, but fail on subsequent calls
+        if call_count["count"] == 1:
+            return original_run(*args, **kwargs)
+        raise OSError("Disk error")
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    context = get_git_context()
+
+    assert "Error running git command" in context["error"]
+
+
+@pytest.mark.unit
+def test_format_git_context_in_repo():
+    """Test formatting git context for repository."""
+    context = {
+        "is_git_repo": True,
+        "branch": "main",
+        "is_clean": True,
+        "has_staged": False,
+        "has_unstaged": False,
+        "has_untracked": False,
+        "commit_hash": "abc1234",
+        "error": None,
+    }
+
+    formatted = format_git_context(context)
+
+    assert "Git Repository: Yes" in formatted
+    assert "Branch: main" in formatted
+    assert "abc1234" in formatted
+    assert "Status: clean" in formatted
+
+
+@pytest.mark.unit
+def test_format_git_context_not_in_repo():
+    """Test formatting git context for non-repository."""
+    context = {
+        "is_git_repo": False,
+        "branch": None,
+        "is_clean": True,
+        "has_staged": False,
+        "has_unstaged": False,
+        "has_untracked": False,
+        "commit_hash": None,
+        "error": None,
+    }
+
+    formatted = format_git_context(context)
+
+    assert "Git Repository: No" in formatted
+
+
+@pytest.mark.unit
+def test_format_git_context_dirty_repo():
+    """Test formatting git context for dirty repository."""
+    context = {
+        "is_git_repo": True,
+        "branch": "feature-branch",
+        "is_clean": False,
+        "has_staged": True,
+        "has_unstaged": True,
+        "has_untracked": True,
+        "commit_hash": "def5678",
+        "error": None,
+    }
+
+    formatted = format_git_context(context)
+
+    assert "Git Repository: Yes" in formatted
+    assert "Branch: feature-branch" in formatted
+    assert "staged changes" in formatted
+    assert "unstaged changes" in formatted
+    assert "untracked files" in formatted
+
+
+@pytest.mark.unit
+def test_format_git_context_with_error():
+    """Test formatting git context with error."""
+    context = {
+        "is_git_repo": False,
+        "branch": None,
+        "is_clean": True,
+        "has_staged": False,
+        "has_unstaged": False,
+        "has_untracked": False,
+        "commit_hash": None,
+        "error": "Git is not installed",
+    }
+
+    formatted = format_git_context(context)
+
+    assert "Git Error:" in formatted
+    assert "not installed" in formatted
+
+
+@pytest.mark.unit
+def test_get_git_context_integration(sample_git_repo, monkeypatch):
+    """Integration test for get_git_context."""
+    monkeypatch.chdir(sample_git_repo)
+
+    # Start with clean repo
+    context = get_git_context()
+    assert context["is_git_repo"] is True
+    assert context["is_clean"] is True
+
+    # Add untracked file
+    (sample_git_repo / "new.txt").write_text("new")
+    context = get_git_context()
+    assert context["is_clean"] is False
+    assert context["has_untracked"] is True
+
+    # Stage the file
+    subprocess.run(["git", "add", "new.txt"], cwd=sample_git_repo, check=True)
+    context = get_git_context()
+    assert context["has_staged"] is True
+
+    # Modify staged file
+    (sample_git_repo / "new.txt").write_text("modified")
+    context = get_git_context()
+    assert context["has_staged"] is True
+    assert context["has_unstaged"] is True
+
+    # Test formatting
+    formatted = format_git_context(context)
+    assert "staged changes" in formatted
+    assert "unstaged changes" in formatted

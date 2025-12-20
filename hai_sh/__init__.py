@@ -12,8 +12,10 @@ from hai_sh.config import (
 )
 from hai_sh.context import (
     format_cwd_context,
+    format_git_context,
     get_cwd_context,
     get_directory_info,
+    get_git_context,
 )
 from hai_sh.init import (
     get_config_path,
@@ -35,4 +37,6 @@ __all__ = [
     "get_cwd_context",
     "get_directory_info",
     "format_cwd_context",
+    "get_git_context",
+    "format_git_context",
 ]

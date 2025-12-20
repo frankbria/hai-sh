@@ -11,6 +11,7 @@ environment to provide to the LLM, including:
 
 import os
 import stat
+import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
@@ -229,5 +230,200 @@ def format_cwd_context(context: dict[str, Any]) -> str:
 
     if context.get("readable") and context.get("size") is not None:
         lines.append(f"Items: {context['size']}")
+
+    return "\n".join(lines)
+
+
+def get_git_context(directory: Optional[str] = None) -> dict[str, Any]:
+    """
+    Collect git repository information for a directory.
+
+    Args:
+        directory: Directory to check (default: current working directory)
+
+    Returns:
+        dict: Dictionary containing git information with keys:
+            - is_git_repo: Whether directory is in a git repository
+            - branch: Current branch name (if in git repo)
+            - is_clean: Whether working directory is clean
+            - has_staged: Whether there are staged changes
+            - has_unstaged: Whether there are unstaged changes
+            - has_untracked: Whether there are untracked files
+            - commit_hash: Short commit hash (if available)
+            - error: Error message if collection failed
+
+    Example:
+        >>> context = get_git_context()
+        >>> if context['is_git_repo']:
+        ...     print(f"Branch: {context['branch']}")
+        ...     print(f"Clean: {context['is_clean']}")
+    """
+    context = {
+        "is_git_repo": False,
+        "branch": None,
+        "is_clean": True,
+        "has_staged": False,
+        "has_unstaged": False,
+        "has_untracked": False,
+        "commit_hash": None,
+        "error": None,
+    }
+
+    try:
+        # Determine directory to check
+        if directory is None:
+            directory = os.getcwd()
+
+        # Check if git is installed
+        try:
+            result = subprocess.run(
+                ["git", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                context["error"] = "Git is not installed or not in PATH"
+                return context
+        except FileNotFoundError:
+            context["error"] = "Git is not installed"
+            return context
+        except subprocess.TimeoutExpired:
+            context["error"] = "Git command timed out"
+            return context
+
+        # Check if directory is in a git repository
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode != 0:
+            # Not a git repository
+            return context
+
+        context["is_git_repo"] = True
+
+        # Get current branch name
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            context["branch"] = result.stdout.strip()
+
+        # Get commit hash
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            context["commit_hash"] = result.stdout.strip()
+
+        # Check git status to determine if clean
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            status_lines = result.stdout.strip().split("\n")
+            if status_lines == [""]:
+                # Empty output means clean
+                context["is_clean"] = True
+            else:
+                context["is_clean"] = False
+
+                # Parse status to detect staged/unstaged/untracked
+                for line in status_lines:
+                    if not line:
+                        continue
+
+                    # First character is staged status, second is unstaged
+                    staged = line[0]
+                    unstaged = line[1] if len(line) > 1 else " "
+
+                    if staged != " " and staged != "?":
+                        context["has_staged"] = True
+                    if unstaged != " ":
+                        context["has_unstaged"] = True
+                    if staged == "?" and unstaged == "?":
+                        context["has_untracked"] = True
+
+    except subprocess.TimeoutExpired:
+        context["error"] = "Git command timed out"
+    except OSError as e:
+        context["error"] = f"Error running git command: {e}"
+    except Exception as e:
+        context["error"] = f"Unexpected error: {e}"
+
+    return context
+
+
+def format_git_context(context: dict[str, Any]) -> str:
+    """
+    Format git context as human-readable string.
+
+    Args:
+        context: Context dictionary from get_git_context()
+
+    Returns:
+        str: Formatted git context string
+
+    Example:
+        >>> context = get_git_context()
+        >>> print(format_git_context(context))
+        Git Repository: Yes
+        Branch: main
+        Status: clean
+    """
+    lines = []
+
+    if context.get("error"):
+        lines.append(f"Git Error: {context['error']}")
+        return "\n".join(lines)
+
+    if not context.get("is_git_repo"):
+        lines.append("Git Repository: No")
+        return "\n".join(lines)
+
+    lines.append("Git Repository: Yes")
+
+    if context.get("branch"):
+        branch = context["branch"]
+        if context.get("commit_hash"):
+            branch = f"{branch} ({context['commit_hash']})"
+        lines.append(f"Branch: {branch}")
+
+    # Build status line
+    if context.get("is_clean"):
+        lines.append("Status: clean")
+    else:
+        status_parts = []
+        if context.get("has_staged"):
+            status_parts.append("staged changes")
+        if context.get("has_unstaged"):
+            status_parts.append("unstaged changes")
+        if context.get("has_untracked"):
+            status_parts.append("untracked files")
+
+        if status_parts:
+            lines.append(f"Status: {', '.join(status_parts)}")
+        else:
+            lines.append("Status: dirty")
 
     return "\n".join(lines)
