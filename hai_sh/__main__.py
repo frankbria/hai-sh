@@ -4,11 +4,17 @@ CLI entry point for hai-sh.
 
 import argparse
 import sys
-from hai_sh import __version__
+from hai_sh import __version__, init_hai_directory
 
 
 def main():
     """Main entry point for the hai-sh CLI."""
+    # Initialize ~/.hai/ directory structure on first run
+    success, error = init_hai_directory()
+    if not success:
+        print(f"Warning: Failed to initialize hai directory: {error}", file=sys.stderr)
+        # Continue anyway - directory might already exist or be accessible later
+
     parser = argparse.ArgumentParser(
         prog="hai-sh",
         description="AI-powered terminal assistant for natural language command generation",
