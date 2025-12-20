@@ -5,6 +5,7 @@ This module provides functions to format command execution output for
 terminal display with color preservation, truncation, and streaming support.
 """
 
+import os
 import re
 import sys
 from typing import Optional, Tuple
@@ -27,6 +28,107 @@ COLORS = {
 
 # ANSI escape sequence pattern
 ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*m')
+
+
+def is_tty(stream=None) -> bool:
+    """
+    Check if output stream is a terminal (TTY).
+
+    Args:
+        stream: Stream to check (default: sys.stdout)
+
+    Returns:
+        bool: True if stream is a TTY
+
+    Example:
+        >>> is_tty()  # Returns True in terminal, False when piped
+        True
+    """
+    if stream is None:
+        stream = sys.stdout
+
+    try:
+        return stream.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def should_use_color(
+    force_color: Optional[bool] = None,
+    stream=None,
+    check_env: bool = True
+) -> bool:
+    """
+    Determine if colors should be used in output.
+
+    Respects:
+    - force_color parameter (highest priority)
+    - NO_COLOR environment variable
+    - FORCE_COLOR environment variable
+    - TTY detection (lowest priority)
+
+    Args:
+        force_color: Explicitly enable/disable colors (overrides everything)
+        stream: Stream to check for TTY (default: sys.stdout)
+        check_env: Whether to check environment variables
+
+    Returns:
+        bool: True if colors should be used
+
+    Example:
+        >>> should_use_color(force_color=True)
+        True
+        >>> should_use_color(force_color=False)
+        False
+    """
+    # Explicit override
+    if force_color is not None:
+        return force_color
+
+    # Check environment variables
+    if check_env:
+        # NO_COLOR takes precedence (https://no-color.org/)
+        if os.environ.get('NO_COLOR'):
+            return False
+
+        # FORCE_COLOR enables colors even in non-TTY
+        if os.environ.get('FORCE_COLOR'):
+            return True
+
+        # CLICOLOR=0 disables colors (BSD convention)
+        if os.environ.get('CLICOLOR') == '0':
+            return False
+
+    # Check if output is a terminal
+    return is_tty(stream)
+
+
+def get_color_mode(
+    force_color: Optional[bool] = None,
+    stream=None
+) -> str:
+    """
+    Get the color mode for output.
+
+    Args:
+        force_color: Explicitly enable/disable colors
+        stream: Stream to check
+
+    Returns:
+        str: 'always', 'never', or 'auto'
+
+    Example:
+        >>> get_color_mode(force_color=True)
+        'always'
+        >>> get_color_mode(force_color=False)
+        'never'
+    """
+    if force_color is True:
+        return 'always'
+    elif force_color is False:
+        return 'never'
+    else:
+        return 'auto'
 
 
 def has_ansi_codes(text: str) -> bool:
