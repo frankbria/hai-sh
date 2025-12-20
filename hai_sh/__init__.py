@@ -12,10 +12,14 @@ from hai_sh.config import (
 )
 from hai_sh.context import (
     format_cwd_context,
+    format_env_context,
     format_git_context,
     get_cwd_context,
     get_directory_info,
+    get_env_context,
     get_git_context,
+    get_safe_env_vars,
+    is_sensitive_env_var,
 )
 from hai_sh.init import (
     get_config_path,
@@ -39,4 +43,8 @@ __all__ = [
     "format_cwd_context",
     "get_git_context",
     "format_git_context",
+    "get_env_context",
+    "format_env_context",
+    "is_sensitive_env_var",
+    "get_safe_env_vars",
 ]

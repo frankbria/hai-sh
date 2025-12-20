@@ -12,10 +12,14 @@ import pytest
 
 from hai_sh.context import (
     format_cwd_context,
+    format_env_context,
     format_git_context,
     get_cwd_context,
     get_directory_info,
+    get_env_context,
     get_git_context,
+    get_safe_env_vars,
+    is_sensitive_env_var,
 )
 
 
@@ -653,3 +657,267 @@ def test_get_git_context_integration(sample_git_repo, monkeypatch):
     formatted = format_git_context(context)
     assert "staged changes" in formatted
     assert "unstaged changes" in formatted
+
+
+# ============================================================================
+# Environment Variable Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_get_env_context_basic(monkeypatch):
+    """Test basic environment context collection."""
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    context = get_env_context()
+
+    assert context["user"] == "testuser"
+    assert context["home"] == "/home/testuser"
+    assert context["shell"] == "/bin/bash"
+    assert context["path"] == "/usr/bin:/bin"
+    assert context["path_truncated"] is False
+    assert len(context["missing"]) == 0
+
+
+@pytest.mark.unit
+def test_get_env_context_logname_fallback(monkeypatch):
+    """Test USER fallback to LOGNAME."""
+    monkeypatch.delenv("USER", raising=False)
+    monkeypatch.setenv("LOGNAME", "logname_user")
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    context = get_env_context(include_path=False)
+
+    assert context["user"] == "logname_user"
+
+
+@pytest.mark.unit
+def test_get_env_context_missing_vars(monkeypatch):
+    """Test environment context with missing variables."""
+    monkeypatch.delenv("USER", raising=False)
+    monkeypatch.delenv("LOGNAME", raising=False)
+    monkeypatch.delenv("HOME", raising=False)
+    monkeypatch.delenv("SHELL", raising=False)
+    monkeypatch.delenv("PATH", raising=False)
+
+    context = get_env_context()
+
+    assert context["user"] is None
+    assert context["home"] is None
+    assert context["shell"] is None
+    assert context["path"] is None
+    assert "USER" in context["missing"]
+    assert "HOME" in context["missing"]
+    assert "SHELL" in context["missing"]
+    assert "PATH" in context["missing"]
+
+
+@pytest.mark.unit
+def test_get_env_context_path_truncation(monkeypatch):
+    """Test PATH truncation when too long."""
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    # Create a very long PATH
+    long_path = ":".join([f"/usr/bin/path{i}" for i in range(100)])
+    monkeypatch.setenv("PATH", long_path)
+
+    context = get_env_context(max_path_length=100)
+
+    assert context["path"] is not None
+    assert len(context["path"]) <= 103  # 100 + "..."
+    assert context["path"].endswith("...")
+    assert context["path_truncated"] is True
+
+
+@pytest.mark.unit
+def test_get_env_context_without_path(monkeypatch):
+    """Test environment context without PATH."""
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    context = get_env_context(include_path=False)
+
+    assert context["path"] is None
+    assert context["path_truncated"] is False
+    assert "PATH" not in context["missing"]
+
+
+@pytest.mark.unit
+def test_is_sensitive_env_var_sensitive():
+    """Test detecting sensitive environment variables."""
+    assert is_sensitive_env_var("API_KEY") is True
+    assert is_sensitive_env_var("SECRET_TOKEN") is True
+    assert is_sensitive_env_var("PASSWORD") is True
+    assert is_sensitive_env_var("OPENAI_API_KEY") is True
+    assert is_sensitive_env_var("AUTH_TOKEN") is True
+    assert is_sensitive_env_var("PRIVATE_KEY") is True
+    assert is_sensitive_env_var("ACCESS_TOKEN") is True
+    assert is_sensitive_env_var("SESSION_SECRET") is True
+    assert is_sensitive_env_var("DB_PASSWORD") is True
+    assert is_sensitive_env_var("CREDENTIALS") is True
+
+
+@pytest.mark.unit
+def test_is_sensitive_env_var_safe():
+    """Test that safe variables are not marked as sensitive."""
+    assert is_sensitive_env_var("HOME") is False
+    assert is_sensitive_env_var("USER") is False
+    assert is_sensitive_env_var("SHELL") is False
+    assert is_sensitive_env_var("PATH") is False
+    assert is_sensitive_env_var("LANG") is False
+    assert is_sensitive_env_var("EDITOR") is False
+    assert is_sensitive_env_var("TERM") is False
+
+
+@pytest.mark.unit
+def test_is_sensitive_env_var_case_insensitive():
+    """Test that sensitivity check is case-insensitive."""
+    assert is_sensitive_env_var("api_key") is True
+    assert is_sensitive_env_var("Api_Key") is True
+    assert is_sensitive_env_var("secret") is True
+    assert is_sensitive_env_var("SECRET") is True
+
+
+@pytest.mark.unit
+def test_get_safe_env_vars(monkeypatch):
+    """Test getting safe environment variables."""
+    # Set up test environment
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setenv("API_KEY", "test_key")
+    monkeypatch.setenv("PASSWORD", "test_pw")
+
+    safe_vars = get_safe_env_vars()
+
+    # Safe variables should be included
+    assert "HOME" in safe_vars
+    assert "USER" in safe_vars
+    assert "SHELL" in safe_vars
+
+    # Sensitive variables should be excluded
+    assert "API_KEY" not in safe_vars
+    assert "PASSWORD" not in safe_vars
+
+
+@pytest.mark.unit
+def test_get_safe_env_vars_with_exclude_patterns(monkeypatch):
+    """Test getting safe variables with additional exclude patterns."""
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("CUSTOM_VAR", "value")
+
+    safe_vars = get_safe_env_vars(exclude_patterns=["CUSTOM"])
+
+    assert "HOME" in safe_vars
+    assert "USER" in safe_vars
+    assert "CUSTOM_VAR" not in safe_vars
+
+
+@pytest.mark.unit
+def test_get_safe_env_vars_case_insensitive_exclude(monkeypatch):
+    """Test that exclude patterns are case-insensitive."""
+    monkeypatch.setenv("MY_CUSTOM_VAR", "value")
+
+    safe_vars = get_safe_env_vars(exclude_patterns=["custom"])
+
+    assert "MY_CUSTOM_VAR" not in safe_vars
+
+
+@pytest.mark.unit
+def test_format_env_context_complete(monkeypatch):
+    """Test formatting complete environment context."""
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    context = get_env_context()
+    formatted = format_env_context(context)
+
+    assert "User: testuser" in formatted
+    assert "Home: /home/testuser" in formatted
+    assert "Shell: /bin/bash" in formatted
+    assert "PATH: /usr/bin:/bin" in formatted
+    assert "(truncated)" not in formatted
+
+
+@pytest.mark.unit
+def test_format_env_context_truncated_path(monkeypatch):
+    """Test formatting environment context with truncated PATH."""
+    monkeypatch.setenv("USER", "testuser")
+    monkeypatch.setenv("HOME", "/home/testuser")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    long_path = ":".join([f"/usr/bin/path{i}" for i in range(100)])
+    monkeypatch.setenv("PATH", long_path)
+
+    context = get_env_context(max_path_length=50)
+    formatted = format_env_context(context)
+
+    assert "PATH:" in formatted
+    assert "(truncated)" in formatted
+
+
+@pytest.mark.unit
+def test_format_env_context_missing_vars(monkeypatch):
+    """Test formatting environment context with missing variables."""
+    monkeypatch.delenv("USER", raising=False)
+    monkeypatch.delenv("LOGNAME", raising=False)
+    monkeypatch.delenv("HOME", raising=False)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    context = get_env_context(include_path=False)
+    formatted = format_env_context(context)
+
+    assert "Shell: /bin/bash" in formatted
+    assert "Missing: USER, HOME" in formatted
+
+
+@pytest.mark.unit
+def test_format_env_context_empty():
+    """Test formatting empty environment context."""
+    context = {
+        "user": None,
+        "home": None,
+        "shell": None,
+        "path": None,
+        "path_truncated": False,
+        "missing": [],
+    }
+
+    formatted = format_env_context(context)
+
+    # Should return empty string or minimal output
+    assert formatted == "" or len(formatted) == 0
+
+
+@pytest.mark.unit
+def test_get_env_context_integration():
+    """Integration test for environment context collection."""
+    # Get actual environment
+    context = get_env_context()
+
+    # Check structure
+    assert "user" in context
+    assert "home" in context
+    assert "shell" in context
+    assert "path" in context
+    assert "path_truncated" in context
+    assert "missing" in context
+
+    # At least one of these should be set in most environments
+    has_values = any(
+        [context["user"], context["home"], context["shell"], context["path"]]
+    )
+    assert has_values
+
+    # Test formatting
+    formatted = format_env_context(context)
+    assert isinstance(formatted, str)

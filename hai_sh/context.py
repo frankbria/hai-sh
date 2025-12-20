@@ -427,3 +427,199 @@ def format_git_context(context: dict[str, Any]) -> str:
             lines.append("Status: dirty")
 
     return "\n".join(lines)
+
+
+def get_env_context(include_path: bool = True, max_path_length: int = 500) -> dict[str, Any]:
+    """
+    Collect relevant environment variables for LLM context.
+
+    Collects USER, HOME, SHELL, and optionally PATH environment variables.
+    Sanitizes PATH to prevent exposing too much information and handles
+    missing variables gracefully.
+
+    Args:
+        include_path: Whether to include PATH variable (default: True)
+        max_path_length: Maximum length for PATH string (default: 500)
+
+    Returns:
+        dict: Dictionary containing environment variables with keys:
+            - user: Username from USER or LOGNAME env var
+            - home: Home directory from HOME env var
+            - shell: Shell from SHELL env var
+            - path: PATH variable (if include_path=True, truncated if needed)
+            - path_truncated: Whether PATH was truncated
+            - missing: List of missing environment variables
+
+    Example:
+        >>> context = get_env_context()
+        >>> print(context['user'])
+        'frankbria'
+        >>> print(context['shell'])
+        '/bin/bash'
+    """
+    context = {
+        "user": None,
+        "home": None,
+        "shell": None,
+        "path": None,
+        "path_truncated": False,
+        "missing": [],
+    }
+
+    # Get USER (try USER first, then LOGNAME as fallback)
+    context["user"] = os.environ.get("USER") or os.environ.get("LOGNAME")
+    if not context["user"]:
+        context["missing"].append("USER")
+
+    # Get HOME
+    context["home"] = os.environ.get("HOME")
+    if not context["home"]:
+        context["missing"].append("HOME")
+
+    # Get SHELL
+    context["shell"] = os.environ.get("SHELL")
+    if not context["shell"]:
+        context["missing"].append("SHELL")
+
+    # Get PATH if requested
+    if include_path:
+        path = os.environ.get("PATH")
+        if path:
+            # Truncate PATH if too long
+            if len(path) > max_path_length:
+                context["path"] = path[:max_path_length] + "..."
+                context["path_truncated"] = True
+            else:
+                context["path"] = path
+                context["path_truncated"] = False
+        else:
+            context["missing"].append("PATH")
+
+    return context
+
+
+def is_sensitive_env_var(var_name: str) -> bool:
+    """
+    Check if an environment variable name looks sensitive.
+
+    Identifies common patterns for sensitive variables like API keys,
+    passwords, tokens, secrets, etc.
+
+    Args:
+        var_name: Environment variable name to check
+
+    Returns:
+        bool: True if variable appears to contain sensitive data
+
+    Example:
+        >>> is_sensitive_env_var("API_KEY")
+        True
+        >>> is_sensitive_env_var("HOME")
+        False
+    """
+    var_name_upper = var_name.upper()
+
+    # Common patterns for sensitive variables
+    sensitive_patterns = [
+        "KEY",
+        "SECRET",
+        "PASSWORD",
+        "TOKEN",
+        "AUTH",
+        "CREDENTIAL",
+        "PRIVATE",
+        "API_KEY",
+        "ACCESS",
+        "SESSION",
+    ]
+
+    # Check if any sensitive pattern is in the variable name
+    for pattern in sensitive_patterns:
+        if pattern in var_name_upper:
+            return True
+
+    return False
+
+
+def get_safe_env_vars(exclude_patterns: Optional[list[str]] = None) -> dict[str, str]:
+    """
+    Get non-sensitive environment variables safe to share with LLM.
+
+    Filters out variables that appear to contain sensitive information
+    like API keys, passwords, tokens, etc.
+
+    Args:
+        exclude_patterns: Additional patterns to exclude (case-insensitive)
+
+    Returns:
+        dict: Dictionary of safe environment variables
+
+    Example:
+        >>> env = get_safe_env_vars()
+        >>> 'HOME' in env
+        True
+        >>> 'API_KEY' in env  # Would be filtered out
+        False
+    """
+    safe_vars = {}
+    exclude_patterns = exclude_patterns or []
+
+    for var_name, var_value in os.environ.items():
+        # Skip if sensitive
+        if is_sensitive_env_var(var_name):
+            continue
+
+        # Skip if matches exclude patterns
+        skip = False
+        for pattern in exclude_patterns:
+            if pattern.upper() in var_name.upper():
+                skip = True
+                break
+
+        if skip:
+            continue
+
+        safe_vars[var_name] = var_value
+
+    return safe_vars
+
+
+def format_env_context(context: dict[str, Any]) -> str:
+    """
+    Format environment context as human-readable string.
+
+    Args:
+        context: Context dictionary from get_env_context()
+
+    Returns:
+        str: Formatted environment context string
+
+    Example:
+        >>> context = get_env_context()
+        >>> print(format_env_context(context))
+        User: frankbria
+        Home: /home/frankbria
+        Shell: /bin/bash
+        PATH: /usr/local/bin:/usr/bin:... (truncated)
+    """
+    lines = []
+
+    if context.get("user"):
+        lines.append(f"User: {context['user']}")
+
+    if context.get("home"):
+        lines.append(f"Home: {context['home']}")
+
+    if context.get("shell"):
+        lines.append(f"Shell: {context['shell']}")
+
+    if context.get("path"):
+        path_line = f"PATH: {context['path']}"
+        if context.get("path_truncated"):
+            path_line += " (truncated)"
+        lines.append(path_line)
+
+    if context.get("missing"):
+        lines.append(f"Missing: {', '.join(context['missing'])}")
+
+    return "\n".join(lines)
