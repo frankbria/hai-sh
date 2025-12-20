@@ -10,6 +10,11 @@ from hai_sh.config import (
     ConfigLoadError,
     load_config,
 )
+from hai_sh.context import (
+    format_cwd_context,
+    get_cwd_context,
+    get_directory_info,
+)
 from hai_sh.init import (
     get_config_path,
     get_hai_dir,
@@ -27,4 +32,7 @@ __all__ = [
     "load_config",
     "ConfigError",
     "ConfigLoadError",
+    "get_cwd_context",
+    "get_directory_info",
+    "format_cwd_context",
 ]
