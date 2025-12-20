@@ -7,6 +7,7 @@ backends.
 """
 
 from hai_sh.providers.base import BaseLLMProvider
+from hai_sh.providers.openai import OpenAIProvider
 from hai_sh.providers.registry import (
     ProviderRegistry,
     get_provider,
@@ -16,6 +17,7 @@ from hai_sh.providers.registry import (
 
 __all__ = [
     "BaseLLMProvider",
+    "OpenAIProvider",
     "ProviderRegistry",
     "get_provider",
     "register_provider",
