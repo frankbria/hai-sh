@@ -36,6 +36,12 @@ from hai_sh.init import (
     init_hai_directory,
     verify_hai_directory,
 )
+from hai_sh.prompt import (
+    build_system_prompt,
+    format_command_output,
+    parse_response,
+    validate_command,
+)
 
 __version__ = "0.0.1"
 __all__ = [
@@ -63,4 +69,8 @@ __all__ = [
     "get_provider",
     "register_provider",
     "list_providers",
+    "build_system_prompt",
+    "parse_response",
+    "validate_command",
+    "format_command_output",
 ]
