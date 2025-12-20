@@ -82,8 +82,21 @@ pipx --version
 
 #### 2. Install hai-sh via pipx
 
+**Note:** hai-sh is not yet published to PyPI. Until then, use one of these methods:
+
 ```bash
-pipx install hai-sh
+# Install from GitHub (recommended for pre-release)
+pipx install git+https://github.com/frankbria/hai-sh.git
+
+# Or install from local directory
+git clone https://github.com/frankbria/hai-sh.git
+cd hai-sh
+pipx install .
+```
+
+Once published to PyPI, you'll be able to install with:
+```bash
+pipx install hai-sh  # Available after PyPI publication
 ```
 
 #### 3. Install Shell Integration
@@ -128,8 +141,21 @@ This method works but may cause dependency conflicts if you have other Python pa
 
 #### 1. Install from PyPI
 
+**Note:** hai-sh is not yet published to PyPI. Until then, use one of these methods:
+
 ```bash
-pip3 install hai-sh
+# Install from GitHub
+pip3 install git+https://github.com/frankbria/hai-sh.git
+
+# Or install from local directory
+git clone https://github.com/frankbria/hai-sh.git
+cd hai-sh
+pip3 install .
+```
+
+Once published to PyPI, you'll be able to install with:
+```bash
+pip3 install hai-sh  # Available after PyPI publication
 ```
 
 #### 2. Verify Installation
@@ -223,17 +249,17 @@ hai --version
 
 ## Shell Integration Setup
 
-Shell integration enables the `Ctrl+Shift+H` keyboard shortcut and `@hai` prefix detection.
+Shell integration enables the `Ctrl+X Ctrl+H` keyboard shortcut and `@hai` prefix detection.
 
 ### Bash Setup
 
 #### Automatic Installation
 
 ```bash
-# Run the installation helper
-hai-install-bash
+# Run the installation helper (installs both bash and zsh)
+hai-install-shell
 
-# Or manually source the integration script
+# Then source the integration script
 source ~/.hai/bash_integration.sh
 ```
 
@@ -291,10 +317,10 @@ Integration test passed!
 #### Automatic Installation
 
 ```bash
-# Run the installation helper
-hai-install-zsh
+# Run the installation helper (installs both bash and zsh)
+hai-install-shell
 
-# Or manually source the integration script
+# Then source the integration script
 source ~/.hai/zsh_integration.sh
 ```
 
