@@ -1,5 +1,5 @@
 """
-CLI entry point for hai-sh.
+CLI entry point for hai.
 """
 
 import argparse
@@ -8,7 +8,7 @@ from hai_sh import __version__, init_hai_directory
 
 
 def main():
-    """Main entry point for the hai-sh CLI."""
+    """Main entry point for the hai CLI."""
     # Initialize ~/.hai/ directory structure on first run
     success, error = init_hai_directory()
     if not success:
@@ -16,7 +16,7 @@ def main():
         # Continue anyway - directory might already exist or be accessible later
 
     parser = argparse.ArgumentParser(
-        prog="hai-sh",
+        prog="hai",
         description="AI-powered terminal assistant for natural language command generation",
         epilog="For more information, visit: https://github.com/frankbria/hai-sh"
     )
@@ -24,7 +24,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version=f"hai-sh version {__version__}"
+        version=f"hai version {__version__}"
     )
 
     # For v0.1, just handle version display
@@ -39,7 +39,7 @@ def main():
 
     # Placeholder for future functionality
     if args.query:
-        print("hai-sh v0.1 is under development.")
+        print("hai v0.1 is under development.")
         print("Command execution will be available soon!")
         print(f"\nYou asked: {' '.join(args.query)}")
         return 0
