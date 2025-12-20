@@ -13,8 +13,9 @@
 ## 🎯 Quick Start
 
 ```bash
-# Install
-pip install hai-sh
+# Install (pipx recommended)
+pipx install hai-sh
+hai-install-shell
 
 # Use directly
 hai "show me files modified in the last 24 hours"
@@ -124,7 +125,11 @@ See [ROADMAP.md](./ROADMAP.md) for complete development plan.
 ### Quick Install
 
 ```bash
-# Install via pip
+# Install via pipx (recommended)
+pipx install hai-sh
+hai-install-shell  # Install shell integration
+
+# Or via pip
 pip install hai-sh
 
 # Verify installation

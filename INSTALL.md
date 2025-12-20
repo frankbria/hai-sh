@@ -60,9 +60,70 @@ Before installing hai-sh, ensure your system meets these requirements:
 
 ## Installation Methods
 
-### Install via pip (Recommended)
+### Install via pipx (Recommended for CLI Tools)
 
-This is the simplest method for most users.
+**pipx** is the recommended way to install Python CLI applications. It installs each application in an isolated environment while making the commands globally available.
+
+#### 1. Install pipx (if not already installed)
+
+```bash
+# Linux
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+
+# macOS
+brew install pipx
+pipx ensurepath
+
+# Verify installation
+pipx --version
+```
+
+#### 2. Install hai-sh via pipx
+
+```bash
+pipx install hai-sh
+```
+
+#### 3. Install Shell Integration
+
+```bash
+hai-install-shell
+```
+
+This will copy shell integration files to `~/.hai/` and show you the next steps.
+
+#### 4. Add to Shell Configuration
+
+**For Bash:**
+```bash
+echo 'source ~/.hai/bash_integration.sh' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**For Zsh:**
+```bash
+echo 'source ~/.hai/zsh_integration.sh' >> ~/.zshrc
+source ~/.zshrc
+```
+
+#### 5. Verify Installation
+
+```bash
+hai --version
+```
+
+**Why pipx?**
+- ✅ Isolated environment (no dependency conflicts)
+- ✅ Global command availability
+- ✅ Easy updates: `pipx upgrade hai-sh`
+- ✅ Clean uninstall: `pipx uninstall hai-sh`
+
+---
+
+### Install via pip (Alternative Method)
+
+This method works but may cause dependency conflicts if you have other Python packages installed.
 
 #### 1. Install from PyPI
 

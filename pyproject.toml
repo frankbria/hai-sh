@@ -49,6 +49,7 @@ dev = [
 
 [project.scripts]
 hai = "hai_sh.__main__:main"
+hai-install-shell = "hai_sh.install_shell:main"
 
 [project.urls]
 Repository = "https://github.com/frankbria/hai-sh"
@@ -57,6 +58,12 @@ Documentation = "https://github.com/frankbria/hai-sh#readme"
 
 [tool.setuptools]
 packages = ["hai_sh"]
+
+[tool.setuptools.package-data]
+hai_sh = [
+    "integrations/*.sh",
+    "integrations/*.md"
+]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
