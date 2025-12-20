@@ -8,11 +8,20 @@ applying defaults, and validating settings.
 import os
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import yaml
 
 from hai_sh.init import get_config_path, init_hai_directory
+
+try:
+    from hai_sh.schema import HaiConfig, validate_config_dict
+
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    HaiConfig = None  # type: ignore
+    validate_config_dict = None  # type: ignore
 
 
 # Default configuration values
@@ -275,7 +284,8 @@ def load_config(
     config_path: Optional[Path] = None,
     use_defaults: bool = True,
     expand_vars: bool = True,
-) -> dict:
+    use_pydantic: bool = True,
+) -> Union[dict, "HaiConfig"]:
     """
     Load and parse configuration file with defaults.
 
@@ -287,17 +297,26 @@ def load_config(
         config_path: Path to config file (default: ~/.hai/config.yaml)
         use_defaults: Whether to merge with default config (default: True)
         expand_vars: Whether to expand environment variables (default: True)
+        use_pydantic: Whether to use Pydantic validation (default: True)
 
     Returns:
-        dict: Complete configuration with defaults applied
+        Union[dict, HaiConfig]: Complete configuration with defaults applied
+            - Returns HaiConfig instance if use_pydantic=True and Pydantic available
+            - Returns dict otherwise
 
     Raises:
         ConfigLoadError: If config cannot be loaded or parsed
+        ConfigValidationError: If Pydantic validation fails
 
     Example:
         >>> config = load_config()
         >>> print(f"Using provider: {config['provider']}")
         >>> print(f"Model: {config['model']}")
+
+        >>> # With Pydantic validation
+        >>> config = load_config(use_pydantic=True)
+        >>> print(f"Using provider: {config.provider}")
+        >>> print(f"Model: {config.model}")
     """
     try:
         # Load config file
@@ -320,7 +339,20 @@ def load_config(
     if expand_vars:
         config = expand_env_vars_recursive(config)
 
-    # Validate and collect warnings
+    # Use Pydantic validation if requested and available
+    if use_pydantic and PYDANTIC_AVAILABLE:
+        try:
+            validated_config, warnings = validate_config_dict(config)
+            # Store warnings in the config object
+            if warnings:
+                # For Pydantic model, we can't add arbitrary attributes
+                # So we'll store warnings in a special way
+                object.__setattr__(validated_config, "_warnings", warnings)
+            return validated_config
+        except ValueError as e:
+            raise ConfigValidationError(str(e))
+
+    # Fallback to basic validation
     warnings = validate_config(config)
     if warnings:
         # Store warnings in config for caller to handle

@@ -220,13 +220,19 @@ def test_load_config_with_defaults(tmp_path, monkeypatch):
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
+    # Test with Pydantic validation (default)
     config = load_config()
+    assert config.provider == "openai"
+    assert config.providers is not None
+    assert config.context is not None
+    assert config.output is not None
 
-    # Should have default values merged in
-    assert config["provider"] == "openai"
-    assert "providers" in config
-    assert "context" in config
-    assert "output" in config
+    # Test without Pydantic validation (returns dict)
+    config_dict = load_config(use_pydantic=False)
+    assert config_dict["provider"] == "openai"
+    assert "providers" in config_dict
+    assert "context" in config_dict
+    assert "output" in config_dict
 
 
 @pytest.mark.unit
@@ -240,7 +246,8 @@ def test_load_config_without_defaults(tmp_path, monkeypatch):
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    config = load_config(use_defaults=False)
+    # Without defaults, we get minimal config - Pydantic will still fill in model defaults
+    config = load_config(use_defaults=False, use_pydantic=False)
 
     # Should only have what's in the file
     assert config["provider"] == "openai"
@@ -265,9 +272,13 @@ providers:
 """
     config_file.write_text(config_content)
 
+    # Test with Pydantic (default)
     config = load_config()
+    assert config.providers.openai.api_key == "secret123"
 
-    assert config["providers"]["openai"]["api_key"] == "secret123"
+    # Test without Pydantic (returns dict)
+    config_dict = load_config(use_pydantic=False)
+    assert config_dict["providers"]["openai"]["api_key"] == "secret123"
 
 
 @pytest.mark.unit
@@ -288,7 +299,8 @@ providers:
 """
     config_file.write_text(config_content)
 
-    config = load_config(expand_vars=False)
+    # Test without Pydantic (returns dict)
+    config = load_config(expand_vars=False, use_pydantic=False)
 
     assert config["providers"]["openai"]["api_key"] == "${MY_API_KEY}"
 
@@ -459,7 +471,7 @@ def test_load_config_warnings(tmp_path, monkeypatch):
     config_dir.mkdir()
     config_file = config_dir / "config.yaml"
 
-    # Config with issues that should generate warnings
+    # Config with issues that should generate warnings (without Pydantic)
     config_content = """
 provider: unknown_provider
 """
@@ -467,7 +479,13 @@ provider: unknown_provider
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    config = load_config()
+    # With Pydantic validation (default), invalid provider raises error
+    from hai_sh.config import ConfigValidationError
 
+    with pytest.raises(ConfigValidationError, match="Configuration validation failed"):
+        load_config()
+
+    # Without Pydantic, warnings are included in dict
+    config = load_config(use_pydantic=False)
     assert "_warnings" in config
     assert len(config["_warnings"]) > 0
