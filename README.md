@@ -44,7 +44,7 @@ See [PRD.md](./PRD.md) for complete requirements and technical architecture.
 
 ```bash
 # Coming soon - v0.1 in development
-pip install hai-cli
+pip install hai-sh
 ```
 
 ## 📖 Usage
@@ -142,8 +142,8 @@ This project is licensed under the GNU Affero General Public License v3.0 - see 
 ## 🔗 Links
 
 - [Product Requirements Document](./PRD.md)
-- [GitHub Issues](https://github.com/frankbria/hai-cli/issues)
-- [Discussions](https://github.com/frankbria/hai-cli/discussions)
+- [GitHub Issues](https://github.com/frankbria/hai-sh/issues)
+- [Discussions](https://github.com/frankbria/hai-sh/discussions)
 
 ## 🙏 Inspiration
 

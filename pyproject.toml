@@ -13,4 +13,4 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/frankbria/hai"
+Repository = "https://github.com/frankbria/hai-sh"

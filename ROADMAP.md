@@ -757,8 +757,8 @@ This roadmap is a living document. As development progresses:
 5. **Technical discoveries** may adjust implementation approaches
 
 ### Feedback Channels
-- **GitHub Issues**: https://github.com/frankbria/hai-cli/issues
-- **Discussions**: https://github.com/frankbria/hai-cli/discussions
+- **GitHub Issues**: https://github.com/frankbria/hai-sh/issues
+- **Discussions**: https://github.com/frankbria/hai-sh/discussions
 - **PRs**: Contributions welcome for any version
 
 ---
