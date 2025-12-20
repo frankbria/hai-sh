@@ -1,6 +1,6 @@
 # pyproject.toml
 [project]
-name = "hai-cli"
+name = "hai-sh"
 version = "0.0.1"
 description = "AI-powered terminal assistant that suggests or executes bash commands from natural language."
 readme = "README.md"
