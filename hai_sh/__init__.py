@@ -23,6 +23,7 @@ from hai_sh.context import (
 )
 from hai_sh.providers import (
     BaseLLMProvider,
+    OllamaProvider,
     OpenAIProvider,
     ProviderRegistry,
     get_provider,
@@ -56,6 +57,7 @@ __all__ = [
     "is_sensitive_env_var",
     "get_safe_env_vars",
     "BaseLLMProvider",
+    "OllamaProvider",
     "OpenAIProvider",
     "ProviderRegistry",
     "get_provider",
