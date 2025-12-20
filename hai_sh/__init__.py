@@ -45,6 +45,14 @@ from hai_sh.prompt import (
     validate_command,
     validate_response_fields,
 )
+from hai_sh.input_detector import (
+    extract_query,
+    get_prefix_variants,
+    is_hai_input,
+    normalize_input,
+    parse_hai_input,
+    validate_query,
+)
 
 __version__ = "0.0.1"
 __all__ = [
@@ -79,4 +87,10 @@ __all__ = [
     "generate_with_retry",
     "extract_fallback_response",
     "validate_response_fields",
+    "is_hai_input",
+    "extract_query",
+    "parse_hai_input",
+    "normalize_input",
+    "get_prefix_variants",
+    "validate_query",
 ]
