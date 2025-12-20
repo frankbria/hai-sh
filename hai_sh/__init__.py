@@ -76,6 +76,18 @@ from hai_sh.output import (
     strip_ansi_codes,
     truncate_output,
 )
+from hai_sh.formatter import (
+    format_command_prompt,
+    format_confidence,
+    format_conversation_layer,
+    format_conversation_only,
+    format_dual_layer,
+    format_execution_layer,
+    format_execution_only,
+    format_execution_result,
+    format_execution_status,
+    strip_formatting,
+)
 
 __version__ = "0.0.1"
 __all__ = [
@@ -135,4 +147,14 @@ __all__ = [
     "stream_output",
     "colorize_text",
     "get_visible_length",
+    "format_conversation_layer",
+    "format_execution_layer",
+    "format_command_prompt",
+    "format_execution_result",
+    "format_execution_status",
+    "format_confidence",
+    "format_dual_layer",
+    "format_conversation_only",
+    "format_execution_only",
+    "strip_formatting",
 ]
