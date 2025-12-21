@@ -74,14 +74,22 @@ class OpenAIProvider(BaseLLMProvider):
         """
         Determine if the current model requires max_completion_tokens parameter.
 
-        OpenAI's newer models (o1 series) require max_completion_tokens instead of
-        the deprecated max_tokens parameter.
+        OpenAI's newer models (o1, gpt-5, gpt-4.1 series) require max_completion_tokens
+        instead of the deprecated max_tokens parameter.
 
         Returns:
             bool: True if model requires max_completion_tokens, False otherwise
         """
         # o1 series models require max_completion_tokens
         if self.model.startswith("o1-") or self.model.startswith("o1"):
+            return True
+
+        # GPT-5 series models require max_completion_tokens
+        if self.model.startswith("gpt-5"):
+            return True
+
+        # GPT-4.1 series models require max_completion_tokens
+        if self.model.startswith("gpt-4.1"):
             return True
 
         # All other models use max_tokens

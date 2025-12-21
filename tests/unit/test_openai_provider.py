@@ -316,6 +316,40 @@ def test_generate_uses_max_completion_tokens_for_o1_models(mock_openai_client):
         assert call_args.kwargs['max_completion_tokens'] == 500
         assert 'max_tokens' not in call_args.kwargs
 
+    # Test with gpt-5-nano
+    config_gpt5_nano = {
+        "api_key": "sk-test",
+        "model": "gpt-5-nano",
+        "max_tokens": 750
+    }
+    provider = OpenAIProvider(config_gpt5_nano)
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        provider.generate("test")
+
+        call_args = mock_create.call_args
+        assert call_args.kwargs['model'] == "gpt-5-nano"
+        assert 'max_completion_tokens' in call_args.kwargs
+        assert call_args.kwargs['max_completion_tokens'] == 750
+        assert 'max_tokens' not in call_args.kwargs
+
+    # Test with gpt-4.1-mini
+    config_gpt41_mini = {
+        "api_key": "sk-test",
+        "model": "gpt-4.1-mini",
+        "max_tokens": 800
+    }
+    provider = OpenAIProvider(config_gpt41_mini)
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        provider.generate("test")
+
+        call_args = mock_create.call_args
+        assert call_args.kwargs['model'] == "gpt-4.1-mini"
+        assert 'max_completion_tokens' in call_args.kwargs
+        assert call_args.kwargs['max_completion_tokens'] == 800
+        assert 'max_tokens' not in call_args.kwargs
+
 
 @pytest.mark.unit
 def test_generate_uses_max_tokens_for_legacy_models(mock_openai_client):

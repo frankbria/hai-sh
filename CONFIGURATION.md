@@ -199,6 +199,11 @@ providers:
 OpenAI model to use.
 
 **Supported models**:
+- `gpt-5-nano` - GPT-5 series (latest, nano size)
+- `gpt-5-mini` - GPT-5 series (mini size)
+- `gpt-5` - GPT-5 series (standard)
+- `gpt-4.1-nano` - GPT-4.1 series (nano size)
+- `gpt-4.1-mini` - GPT-4.1 series (mini size)
 - `o1-preview` - OpenAI o1 series (advanced reasoning)
 - `o1-mini` - OpenAI o1 series (smaller, faster)
 - `gpt-4o` - Latest GPT-4 Omni (most capable, expensive)
@@ -209,7 +214,7 @@ OpenAI model to use.
 
 **Note**: The `max_tokens` configuration parameter is automatically mapped to the
 appropriate API parameter (`max_tokens` or `max_completion_tokens`) based on the
-model being used. o1 series models automatically use `max_completion_tokens`.
+model being used. Newer models (o1, gpt-5, gpt-4.1 series) automatically use `max_completion_tokens`.
 
 **Cost considerations**:
 - `gpt-4o-mini`: ~$0.15 per 1M input tokens (best value)
