@@ -147,6 +147,12 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--suggest-only",
+        action="store_true",
+        help="generate command suggestion without executing (returns JSON for shell integration)"
+    )
+
+    parser.add_argument(
         "query",
         nargs="*",
         help="natural language command description"
@@ -325,6 +331,17 @@ def main():
         explanation = response.get('explanation', 'No explanation provided')
         command = response.get('command', '')  # May be empty for question mode
         confidence = response.get('confidence', 0)
+
+        # Handle --suggest-only mode (for shell integration)
+        if args.suggest_only:
+            import json
+            output = {
+                "conversation": explanation,
+                "command": command,
+                "confidence": confidence
+            }
+            print(json.dumps(output))
+            return 0
 
         # Determine color settings
         use_colors = should_use_color()

@@ -249,7 +249,7 @@ hai --version
 
 ## Shell Integration Setup
 
-Shell integration enables the `Ctrl+X Ctrl+H` keyboard shortcut and `@hai` prefix detection.
+Shell integration enables the `Ctrl+X Ctrl+H` keyboard shortcut and `@hai` prefix detection, with full dual-layer output, confidence scoring, and interactive command confirmation.
 
 ### Bash Setup
 

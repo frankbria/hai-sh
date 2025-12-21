@@ -48,6 +48,9 @@ $ find . -type f -mtime -1
 ### Core Capabilities
 
 - **🎯 Natural Language Interface**: Just describe what you want in plain English
+- **💬 Dual Mode Operation**:
+  - **Command Mode**: Generate and execute bash commands
+  - **Question Mode**: Get answers to your terminal/bash questions without executing anything
 - **🔄 Dual-Layer Output**: See both the AI's reasoning and the actual command
 - **🌍 Context-Aware**: Automatically includes current directory, git state, and environment
 - **🔒 Privacy-First**: Supports local Ollama models—no API costs, data stays private
@@ -301,11 +304,24 @@ hai "run pytest with coverage"
 hai "build Docker image and tag as latest"
 ```
 
+**Asking Questions (No Command Execution):**
+```bash
+hai "What's the difference between ls -la and ls -lah?"
+hai "How does git rebase work?"
+hai "When should I use grep vs awk vs sed?"
+hai "Explain what the -R flag does in chmod"
+hai "Why would I use git merge instead of git rebase?"
+```
+
 **📖 20+ examples and tutorials:** [USAGE.md](./USAGE.md)
 
 ## 🎯 Understanding Dual-Layer Output
 
-hai shows both **what the AI is thinking** and **what command it generates**:
+hai operates in two modes automatically:
+
+### Command Mode (Action Requests)
+
+When you request an action, hai shows both **what the AI is thinking** and **what command it generates**:
 
 ```
 ━━━ Conversation ━━━
@@ -321,13 +337,36 @@ $ find ~ -type f -size +100M -exec du -h {} + | sort -rh | head -20
 1.2G    /home/user/videos/movie.mp4
 856M    /home/user/downloads/ubuntu.iso
 234M    /home/user/.cache/spotify/Data/1234.cache
+
+Execute this command? [y/N/e(dit)]:
+```
+
+### Question Mode (Informational Questions)
+
+When you ask a question, hai provides a direct answer without generating a command:
+
+```bash
+$ hai "What's the difference between rm -rf and rm -r?"
+```
+
+```
+Both commands remove directories recursively (-r flag), but there's an
+important difference in the -f flag:
+
+- rm -r: Recursive removal, prompts for confirmation on write-protected files
+- rm -rf: Recursive removal with -f (force), suppresses all prompts
+
+⚠️ Use rm -rf with extreme caution! It will delete everything without asking.
+
+Confidence: 98% [█████████·]
 ```
 
 **Benefits:**
 - **Learning**: Understand what commands do and why
 - **Transparency**: See the AI's reasoning process
 - **Confidence**: Visual indicator shows reliability (0-100%)
-- **Trust**: Verify before executing
+- **Trust**: Verify before executing (command mode)
+- **Knowledge**: Get answers without execution (question mode)
 
 ## 🤝 Contributing
 

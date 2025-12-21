@@ -27,6 +27,115 @@ if [[ -z "$HAI_TESTING" ]] && ! command -v hai &> /dev/null; then
     return 1 2>/dev/null || exit 1
 fi
 
+# Helper function to parse JSON response from hai --suggest-only
+_hai_parse_json() {
+    local json="$1"
+
+    # Try to use python3 for JSON parsing (most reliable)
+    if command -v python3 &> /dev/null; then
+        python3 -c "
+import json, sys
+try:
+    data = json.loads('''$json''')
+    print(data.get('conversation', ''))
+    print('<<<SEPARATOR>>>')
+    print(data.get('command', ''))
+    print('<<<SEPARATOR>>>')
+    print(data.get('confidence', 0))
+except:
+    sys.exit(1)
+"
+        return $?
+    # Fallback to jq if available
+    elif command -v jq &> /dev/null; then
+        echo "$json" | jq -r '.conversation'
+        echo "<<<SEPARATOR>>>"
+        echo "$json" | jq -r '.command'
+        echo "<<<SEPARATOR>>>"
+        echo "$json" | jq -r '.confidence'
+        return 0
+    else
+        # Basic fallback parsing (not robust)
+        echo "Warning: Install python3 or jq for better JSON parsing" >&2
+        return 1
+    fi
+}
+
+# Helper function to format confidence bar
+_hai_format_confidence() {
+    local confidence="$1"
+    local use_colors="${2:-true}"
+
+    # Calculate bar (10 blocks total)
+    local filled=$((confidence / 10))
+    local empty=$((10 - filled))
+
+    local bar=""
+    for ((i=0; i<filled; i++)); do
+        bar+="█"
+    done
+    for ((i=0; i<empty; i++)); do
+        bar+="·"
+    done
+
+    # Color code based on confidence
+    if [[ "$use_colors" == "true" ]] && [[ -z "$NO_COLOR" ]]; then
+        local color=""
+        if ((confidence >= 80)); then
+            color="\033[92m"  # Green
+        elif ((confidence >= 60)); then
+            color="\033[93m"  # Yellow
+        else
+            color="\033[91m"  # Red
+        fi
+        local reset="\033[0m"
+        echo -e "${color}${confidence}%${reset} [${bar}]"
+    else
+        echo "${confidence}% [${bar}]"
+    fi
+}
+
+# Helper function to display dual-layer output
+_hai_display_dual_layer() {
+    local conversation="$1"
+    local command="$2"
+    local confidence="$3"
+    local use_colors="true"
+
+    # Check if colors should be disabled
+    if [[ -n "$NO_COLOR" ]]; then
+        use_colors="false"
+    fi
+
+    # ANSI color codes
+    local cyan="\033[96m"
+    local green="\033[92m"
+    local bold="\033[1m"
+    local reset="\033[0m"
+
+    if [[ "$use_colors" != "true" ]]; then
+        cyan=""
+        green=""
+        bold=""
+        reset=""
+    fi
+
+    echo ""
+    echo -e "${cyan}━━━ Conversation ━━━${reset}"
+    echo "$conversation"
+    echo ""
+    echo -e "${bold}Confidence:${reset} $(_hai_format_confidence "$confidence" "$use_colors")"
+    echo ""
+
+    # Only show execution layer if there's a command (not question mode)
+    if [[ -n "$command" ]]; then
+        echo "═══════════════════"
+        echo -e "${cyan}━━━ Execution ━━━${reset}"
+        echo -e "${green}\$ ${command}${reset}"
+        echo ""
+    fi
+}
+
 # Function to trigger hai-sh from readline
 _hai_trigger() {
     local current_line="$READLINE_LINE"
@@ -51,40 +160,92 @@ _hai_trigger() {
     # Prepare the query
     local query="$current_line"
 
-    # If the line doesn't start with @hai, prepend it
-    if [[ ! "$query" =~ ^[[:space:]]*@hai ]]; then
-        query="@hai $query"
-    fi
+    # Remove @hai prefix if present (hai will handle it)
+    query="${query#@hai }"
+    query="${query#@hai}"
 
     # Clear the current line
     READLINE_LINE=""
     READLINE_POINT=0
 
-    # Echo what we're processing (for user feedback)
-    echo ""
-    echo "🤖 hai: Processing: $query"
-    echo ""
-
-    # Call hai with the query and capture the result
-    # Note: This is a simplified version. In a full implementation,
-    # hai would return the command and ask for confirmation.
-    local result
-    if result=$(hai "$query" 2>&1); then
-        # If successful, put the result on the command line
-        READLINE_LINE="$result"
-        READLINE_POINT="${#result}"
-
-        # Show the result
-        echo "✓ Suggested command: $result"
+    # Call hai with --suggest-only to get JSON response
+    local json_response
+    if ! json_response=$(hai --suggest-only "$query" 2>&1); then
         echo ""
-    else
-        # If failed, restore the original line
+        echo "✗ Error calling hai:"
+        echo "$json_response"
+        echo ""
+        # Restore original line
         READLINE_LINE="$current_line"
         READLINE_POINT="$saved_cursor"
-
-        echo "✗ Error: $result"
-        echo ""
+        return 1
     fi
+
+    # Parse JSON response
+    local parse_output
+    if ! parse_output=$(_hai_parse_json "$json_response"); then
+        echo ""
+        echo "✗ Error parsing response"
+        echo "Raw output: $json_response"
+        echo ""
+        # Restore original line
+        READLINE_LINE="$current_line"
+        READLINE_POINT="$saved_cursor"
+        return 1
+    fi
+
+    # Extract fields (separated by <<<SEPARATOR>>>)
+    local conversation
+    local command
+    local confidence
+
+    IFS='<<<SEPARATOR>>>' read -r conversation command confidence <<< "$parse_output"
+
+    # Clean up whitespace
+    conversation=$(echo "$conversation" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    command=$(echo "$command" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    confidence=$(echo "$confidence" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    # Display dual-layer output
+    _hai_display_dual_layer "$conversation" "$command" "$confidence"
+
+    # If no command (question mode), just return
+    if [[ -z "$command" ]]; then
+        READLINE_LINE=""
+        READLINE_POINT=0
+        return 0
+    fi
+
+    # Prompt for confirmation
+    local response
+    read -p "Execute this command? [Y/n]: " response
+
+    # Handle response
+    case "${response,,}" in  # Convert to lowercase
+        ""|y|yes)
+            echo ""
+            echo "Executing..."
+            echo ""
+            # Execute the command
+            eval "$command"
+            ;;
+        n|no)
+            echo ""
+            echo "Command execution cancelled"
+            echo ""
+            ;;
+        *)
+            echo ""
+            echo "Invalid response. Command not executed."
+            echo ""
+            ;;
+    esac
+
+    # Clear the readline buffer
+    READLINE_LINE=""
+    READLINE_POINT=0
+
+    return 0
 }
 
 # Function to display current key binding

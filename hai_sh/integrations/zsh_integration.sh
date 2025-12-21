@@ -27,6 +27,115 @@ if [[ -z "$HAI_TESTING" ]] && ! command -v hai &> /dev/null; then
     return 1 2>/dev/null || exit 1
 fi
 
+# Helper function to parse JSON response from hai --suggest-only
+_hai_parse_json() {
+    local json="$1"
+
+    # Try to use python3 for JSON parsing (most reliable)
+    if command -v python3 &> /dev/null; then
+        python3 -c "
+import json, sys
+try:
+    data = json.loads('''$json''')
+    print(data.get('conversation', ''))
+    print('<<<SEPARATOR>>>')
+    print(data.get('command', ''))
+    print('<<<SEPARATOR>>>')
+    print(data.get('confidence', 0))
+except:
+    sys.exit(1)
+"
+        return $?
+    # Fallback to jq if available
+    elif command -v jq &> /dev/null; then
+        print -r "$json" | jq -r '.conversation'
+        print "<<<SEPARATOR>>>"
+        print -r "$json" | jq -r '.command'
+        print "<<<SEPARATOR>>>"
+        print -r "$json" | jq -r '.confidence'
+        return 0
+    else
+        # Basic fallback parsing (not robust)
+        print "Warning: Install python3 or jq for better JSON parsing" >&2
+        return 1
+    fi
+}
+
+# Helper function to format confidence bar
+_hai_format_confidence() {
+    local confidence="$1"
+    local use_colors="${2:-true}"
+
+    # Calculate bar (10 blocks total)
+    local filled=$((confidence / 10))
+    local empty=$((10 - filled))
+
+    local bar=""
+    for ((i=0; i<filled; i++)); do
+        bar+="█"
+    done
+    for ((i=0; i<empty; i++)); do
+        bar+="·"
+    done
+
+    # Color code based on confidence
+    if [[ "$use_colors" == "true" ]] && [[ -z "$NO_COLOR" ]]; then
+        local color=""
+        if ((confidence >= 80)); then
+            color="\033[92m"  # Green
+        elif ((confidence >= 60)); then
+            color="\033[93m"  # Yellow
+        else
+            color="\033[91m"  # Red
+        fi
+        local reset="\033[0m"
+        print -P "%{${color}%}${confidence}%%%{${reset}%} [${bar}]"
+    else
+        print "${confidence}% [${bar}]"
+    fi
+}
+
+# Helper function to display dual-layer output
+_hai_display_dual_layer() {
+    local conversation="$1"
+    local command="$2"
+    local confidence="$3"
+    local use_colors="true"
+
+    # Check if colors should be disabled
+    if [[ -n "$NO_COLOR" ]]; then
+        use_colors="false"
+    fi
+
+    # ANSI color codes
+    local cyan="%{[96m%}"
+    local green="%{[92m%}"
+    local bold="%{[1m%}"
+    local reset="%{[0m%}"
+
+    if [[ "$use_colors" != "true" ]]; then
+        cyan=""
+        green=""
+        bold=""
+        reset=""
+    fi
+
+    print ""
+    print -P "${cyan}━━━ Conversation ━━━${reset}"
+    print "$conversation"
+    print ""
+    print -P "${bold}Confidence:${reset} $(_hai_format_confidence "$confidence" "$use_colors")"
+    print ""
+
+    # Only show execution layer if there's a command (not question mode)
+    if [[ -n "$command" ]]; then
+        print "═══════════════════"
+        print -P "${cyan}━━━ Execution ━━━${reset}"
+        print -P "${green}\$ ${command}${reset}"
+        print ""
+    fi
+}
+
 # ZLE widget to trigger hai-sh
 _hai_trigger_widget() {
     local current_buffer="$BUFFER"
@@ -50,43 +159,95 @@ _hai_trigger_widget() {
     # Prepare the query
     local query="$current_buffer"
 
-    # If the buffer doesn't start with @hai, prepend it
-    if [[ ! "$query" =~ ^[[:space:]]*@hai ]]; then
-        query="@hai $query"
-    fi
+    # Remove @hai prefix if present (hai will handle it)
+    query="${query#@hai }"
+    query="${query#@hai}"
 
     # Clear the current buffer
     BUFFER=""
     zle redisplay
 
-    # Echo what we're processing (for user feedback)
-    print ""
-    print "🤖 hai: Processing: $query"
-    print ""
-
-    # Call hai with the query and capture the result
-    # Note: This is a simplified version. In a full implementation,
-    # hai would return the command and ask for confirmation.
-    local result
-    if result=$(hai "$query" 2>&1); then
-        # If successful, put the result on the command line
-        BUFFER="$result"
-        CURSOR="${#result}"
-
-        # Show the result
-        print "✓ Suggested command: $result"
+    # Call hai with --suggest-only to get JSON response
+    local json_response
+    if ! json_response=$(hai --suggest-only "$query" 2>&1); then
         print ""
-    else
-        # If failed, restore the original buffer
+        print "✗ Error calling hai:"
+        print "$json_response"
+        print ""
+        # Restore original buffer
         BUFFER="$current_buffer"
         CURSOR="$saved_cursor"
-
-        print "✗ Error: $result"
-        print ""
+        zle reset-prompt
+        return 1
     fi
 
-    # Reset the prompt to show the new buffer
+    # Parse JSON response
+    local parse_output
+    if ! parse_output=$(_hai_parse_json "$json_response"); then
+        print ""
+        print "✗ Error parsing response"
+        print "Raw output: $json_response"
+        print ""
+        # Restore original buffer
+        BUFFER="$current_buffer"
+        CURSOR="$saved_cursor"
+        zle reset-prompt
+        return 1
+    fi
+
+    # Extract fields (separated by <<<SEPARATOR>>>)
+    local conversation
+    local command
+    local confidence
+
+    IFS='<<<SEPARATOR>>>' read -r conversation command confidence <<< "$parse_output"
+
+    # Clean up whitespace
+    conversation=$(print -r "$conversation" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    command=$(print -r "$command" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    confidence=$(print -r "$confidence" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    # Display dual-layer output
+    _hai_display_dual_layer "$conversation" "$command" "$confidence"
+
+    # If no command (question mode), just return
+    if [[ -z "$command" ]]; then
+        BUFFER=""
+        zle reset-prompt
+        return 0
+    fi
+
+    # Prompt for confirmation
+    local response
+    print -n "Execute this command? [Y/n]: "
+    read response
+
+    # Handle response
+    case "${response:l}" in  # Convert to lowercase
+        ""|y|yes)
+            print ""
+            print "Executing..."
+            print ""
+            # Execute the command using eval
+            eval "$command"
+            ;;
+        n|no)
+            print ""
+            print "Command execution cancelled"
+            print ""
+            ;;
+        *)
+            print ""
+            print "Invalid response. Command not executed."
+            print ""
+            ;;
+    esac
+
+    # Clear the buffer
+    BUFFER=""
     zle reset-prompt
+
+    return 0
 }
 
 # Function to display current key binding

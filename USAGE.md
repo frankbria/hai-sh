@@ -7,6 +7,7 @@ Practical examples and tutorial for using hai-sh, your AI-powered terminal assis
 - [Getting Started](#getting-started)
 - [Invocation Methods](#invocation-methods)
 - [Understanding Dual-Layer Output](#understanding-dual-layer-output)
+- [Asking Questions vs Requesting Commands](#asking-questions-vs-requesting-commands)
 - [Example Categories](#example-categories)
   - [File Operations](#file-operations)
   - [Git Workflows](#git-workflows)
@@ -145,11 +146,23 @@ find large log files
 
 # 2. Press Ctrl+X Ctrl+H
 
-# 3. hai processes and suggests command
-━━━ Conversation ━━━
-I'll search for large log files using find.
+# 3. hai displays dual-layer output with conversation and command
 
+━━━ Conversation ━━━
+I'll search for large log files in /var/log using find with size filter.
+
+Confidence: 90% [█████████·]
+
+═══════════════════
+━━━ Execution ━━━
 $ find /var/log -type f -size +10M
+
+Execute this command? [Y/n]: y
+
+# 4. Command executes after confirmation
+Executing...
+/var/log/syslog.1
+/var/log/kern.log
 ```
 
 **Custom key bindings:**
@@ -164,6 +177,12 @@ export HAI_KEY_BINDING="\eh"   # Use Alt+H
 - Speed users
 - Frequent hai use
 - Minimal typing
+
+**Features:**
+- Full dual-layer output (conversation + command)
+- Confidence scoring with visual indicators
+- Interactive confirmation before execution
+- Question mode support (no execution for informational queries)
 
 ---
 
@@ -233,6 +252,253 @@ output:
 ```yaml
 output:
   show_conversation: false  # Command only
+```
+
+---
+
+## Asking Questions vs Requesting Commands
+
+hai operates in two modes: **Command Mode** and **Question Mode**. Understanding when each mode is used helps you get the most out of hai.
+
+### Command Mode: Generate and Execute Commands
+
+When you request an **action**, hai generates a bash command for you to execute.
+
+**Trigger words:** "show me", "find", "list", "create", "delete", "move", "install", "run"
+
+**Example:**
+```bash
+hai "find large files in my home directory"
+```
+
+**Output:**
+```
+━━━ Conversation ━━━
+I'll search for files larger than 100MB in your home directory.
+
+Confidence: 90% [█████████·]
+
+═══════════════════
+━━━ Execution ━━━
+$ find ~ -type f -size +100M -exec du -h {} + | sort -rh | head -20
+
+Execute this command? [y/N/e(dit)]:
+```
+
+---
+
+### Question Mode: Get Answers Without Commands
+
+When you ask an **informational question**, hai provides a direct answer without generating a command.
+
+**Trigger words:** "what", "why", "how", "difference between", "explain", "when should"
+
+**Example:**
+```bash
+hai "What's the difference between ls -la and ls -lah?"
+```
+
+**Output:**
+```
+Both commands list all files including hidden ones (-a) in long format (-l).
+The only difference is the -h flag in 'ls -lah', which displays file sizes
+in human-readable format (KB, MB, GB) instead of bytes.
+
+Confidence: 95% [█████████·]
+```
+
+**Notice:** No command is generated, and you're not prompted to execute anything. You get a direct answer.
+
+---
+
+### How hai Decides Which Mode to Use
+
+hai automatically detects whether you're asking a question or requesting an action:
+
+**Question Mode Examples:**
+```bash
+hai "What does the -R flag do in chmod?"
+hai "Why would I use git rebase instead of git merge?"
+hai "Explain what grep -r does"
+hai "When should I use sudo?"
+hai "How does pipe (|) work in bash?"
+hai "What's the difference between curl and wget?"
+```
+
+**Command Mode Examples:**
+```bash
+hai "show me files modified today"
+hai "list running Docker containers"
+hai "create a new git branch called feature/auth"
+hai "compress all PDFs in this folder"
+hai "install dependencies from package.json"
+```
+
+---
+
+### Mixed Scenarios
+
+Sometimes you might want both an explanation AND a command. You can phrase it either way:
+
+**Option 1: Ask for explanation, get command too**
+```bash
+hai "explain how to find large files"
+```
+Output: Explanation + optional command suggestion
+
+**Option 2: Request command, get explanation too**
+```bash
+hai "find large files"
+```
+Output: Command + explanation in Conversation layer
+
+---
+
+### Tips for Asking Questions
+
+**1. Use question words explicitly:**
+```bash
+✅ "What is the difference between grep and awk?"
+✅ "Why would I use find instead of ls?"
+✅ "How does xargs work?"
+```
+
+**2. Ask for explanations:**
+```bash
+✅ "Explain what this command does: git rebase -i HEAD~3"
+✅ "Explain the difference between && and ||"
+```
+
+**3. Ask for comparisons:**
+```bash
+✅ "What's the difference between source and ./"
+✅ "Compare tar -xzf and tar -xjf"
+```
+
+**4. Ask for best practices:**
+```bash
+✅ "When should I use git merge vs git rebase?"
+✅ "Should I use single quotes or double quotes in bash?"
+```
+
+---
+
+### Learning Mode: Use Questions to Understand Commands
+
+hai is a great learning tool. Before executing an unfamiliar command, ask about it:
+
+**Workflow:**
+```bash
+# 1. Get a command suggestion
+hai "compress this folder"
+$ tar -czf folder.tar.gz folder/
+
+# 2. Don't understand the flags? Ask!
+hai "what do the -czf flags mean in tar?"
+
+# Output:
+# -c: Create a new archive
+# -z: Compress with gzip
+# -f: Specify filename for the archive
+# Together, they create a compressed tar archive (tarball)
+
+# 3. Now execute with confidence!
+tar -czf folder.tar.gz folder/
+```
+
+---
+
+### Question Mode Examples
+
+#### Example: Understanding Command Differences
+
+**Query:**
+```bash
+hai "What's the difference between rm -rf and rm -r?"
+```
+
+**Output:**
+```
+Both commands remove directories recursively (-r flag), but there's an
+important difference in the -f flag:
+
+- rm -r: Recursive removal, but prompts for confirmation on write-protected files
+- rm -rf: Recursive removal with -f (force), which suppresses all prompts
+         and ignores nonexistent files
+
+⚠️ Use rm -rf with extreme caution! It will delete everything without asking,
+   including write-protected files. There's no undo.
+
+Confidence: 98% [█████████·]
+```
+
+---
+
+#### Example: Explaining Complex Concepts
+
+**Query:**
+```bash
+hai "How does git rebase work?"
+```
+
+**Output:**
+```
+Git rebase rewrites commit history by moving commits from one base to another.
+
+Here's what happens:
+1. Git finds the common ancestor between your branch and the target branch
+2. It temporarily saves your commits
+3. Fast-forwards your branch to match the target
+4. Replays your saved commits one by one on top
+
+Example: If you're on feature-branch and run 'git rebase main':
+- Your commits are moved to start after the latest commit on main
+- This creates a linear history instead of a merge commit
+
+Use cases:
+- Keep feature branches up-to-date with main
+- Clean up messy commit history before merging
+- Create a linear project history
+
+⚠️ Never rebase commits that have been pushed to shared branches!
+
+Confidence: 95% [█████████·]
+```
+
+---
+
+#### Example: When to Use Which Tool
+
+**Query:**
+```bash
+hai "When should I use grep vs awk vs sed?"
+```
+
+**Output:**
+```
+Each tool has its strengths:
+
+**grep** - Best for: Finding lines that match patterns
+- Simple searches: "find lines containing 'error'"
+- Fast and efficient for filtering
+- Example: grep "ERROR" logfile.txt
+
+**awk** - Best for: Column-based processing and calculations
+- Working with structured data (CSV, logs with columns)
+- Performing math on fields
+- Example: awk '{print $1, $3}' data.txt  # Print columns 1 and 3
+
+**sed** - Best for: Find-and-replace operations
+- Substituting text: s/old/new/
+- Deleting specific lines
+- Example: sed 's/foo/bar/g' file.txt  # Replace foo with bar
+
+Rule of thumb:
+- Just searching? → grep
+- Need to modify text? → sed
+- Working with columns/calculations? → awk
+
+Confidence: 95% [█████████·]
 ```
 
 ---

@@ -654,3 +654,229 @@ def test_integration_with_real_filesystem(tmp_path):
 
     assert result.success
     assert "README.md" in result.stdout
+
+
+# ============================================================================
+# Question-Answering Mode Tests (Issue #27)
+# ============================================================================
+
+
+@pytest.mark.integration
+def test_question_mode_ls_difference(mock_provider):
+    """
+    Test: "What's the difference between ls -la and ls -lah?"
+
+    Verifies:
+    - Question is detected (no command generated)
+    - Explanation is provided
+    - Confidence is returned
+    - No command field in response
+    """
+    query = "What's the difference between ls -la and ls -lah?"
+
+    # Set up mock response (question mode - no command)
+    mock_provider.set_response(
+        query,
+        {
+            "explanation": "Both commands list all files including hidden ones (-a) in long format (-l). The only difference is the -h flag in 'ls -lah', which displays file sizes in human-readable format (KB, MB, GB) instead of bytes. For example, instead of 1048576, it shows 1.0M.",
+            "confidence": 95,
+        }
+    )
+
+    # Test LLM generation
+    response = mock_provider.generate(query)
+    parsed = parse_response(response)
+
+    # Verify question mode response
+    assert "command" not in parsed  # No command in question mode
+    assert "explanation" in parsed
+    assert "confidence" in parsed
+
+    # Verify explanation content
+    assert "ls -la" in parsed["explanation"] or "ls -lah" in parsed["explanation"]
+    assert "human-readable" in parsed["explanation"] or "-h" in parsed["explanation"]
+    assert parsed["confidence"] >= 90
+
+
+@pytest.mark.integration
+def test_question_mode_git_rebase(mock_provider):
+    """
+    Test: "How do I use git rebase?"
+
+    Verifies question-answering for git workflow questions.
+    """
+    query = "How do I use git rebase?"
+
+    # Set up mock response
+    mock_provider.set_response(
+        query,
+        {
+            "explanation": "Git rebase moves or combines commits from one branch onto another. Use 'git rebase <branch>' to rebase current branch onto <branch>, or 'git rebase -i HEAD~N' for interactive rebase of last N commits. It's useful for cleaning up commit history before merging, but avoid rebasing commits that have been pushed to shared branches.",
+            "confidence": 90,
+        }
+    )
+
+    response = mock_provider.generate(query)
+    parsed = parse_response(response)
+
+    # Verify question mode
+    assert "command" not in parsed
+    assert "git rebase" in parsed["explanation"]
+    assert parsed["confidence"] >= 85
+
+
+@pytest.mark.integration
+def test_question_mode_grep_vs_awk(mock_provider):
+    """
+    Test: "Why would I use grep instead of awk?"
+
+    Verifies comparison questions are handled properly.
+    """
+    query = "Why would I use grep instead of awk?"
+
+    mock_provider.set_response(
+        query,
+        {
+            "explanation": "Use grep for simple pattern matching and filtering lines. Use awk for complex text processing that requires field extraction, arithmetic, or conditional logic. Grep is faster and simpler for basic searches, while awk is more powerful for data manipulation and formatted output.",
+            "confidence": 95,
+        }
+    )
+
+    response = mock_provider.generate(query)
+    parsed = parse_response(response)
+
+    assert "command" not in parsed
+    assert "grep" in parsed["explanation"]
+    assert "awk" in parsed["explanation"]
+    assert parsed["confidence"] >= 90
+
+
+@pytest.mark.integration
+def test_question_mode_explain_command(mock_provider):
+    """
+    Test: "Explain what the find command does"
+
+    Verifies explanatory questions work.
+    """
+    query = "Explain what the find command does"
+
+    mock_provider.set_response(
+        query,
+        {
+            "explanation": "The find command searches for files and directories in a directory hierarchy. It can filter by name, type, size, modification time, and more. For example, 'find . -name \"*.py\"' finds all Python files in the current directory and subdirectories.",
+            "confidence": 95,
+        }
+    )
+
+    response = mock_provider.generate(query)
+    parsed = parse_response(response)
+
+    assert "command" not in parsed
+    assert "find" in parsed["explanation"]
+    assert parsed["confidence"] >= 90
+
+
+@pytest.mark.integration
+def test_question_mode_when_to_use_sudo(mock_provider):
+    """
+    Test: "When should I use sudo?"
+
+    Verifies advisory questions are handled.
+    """
+    query = "When should I use sudo?"
+
+    mock_provider.set_response(
+        query,
+        {
+            "explanation": "Use sudo when you need elevated privileges for system-level operations like installing packages, modifying system files, changing network settings, or managing services. Avoid using sudo for regular user tasks to minimize security risks. Only use it when necessary and be cautious with the commands you run.",
+            "confidence": 95,
+        }
+    )
+
+    response = mock_provider.generate(query)
+    parsed = parse_response(response)
+
+    assert "command" not in parsed
+    assert "sudo" in parsed["explanation"]
+    assert "privilege" in parsed["explanation"].lower() or "elevated" in parsed["explanation"].lower()
+
+
+@pytest.mark.integration
+def test_mixed_mode_command_vs_question(mock_provider):
+    """
+    Test that command mode and question mode work in sequence.
+
+    Verifies the system correctly switches between modes.
+    """
+    # First: Question mode
+    question = "What does ls do?"
+    mock_provider.set_response(
+        question,
+        {
+            "explanation": "The ls command lists directory contents. It shows files and folders in the current or specified directory.",
+            "confidence": 95,
+        }
+    )
+
+    response_q = mock_provider.generate(question)
+    parsed_q = parse_response(response_q)
+
+    assert "command" not in parsed_q
+    assert "ls" in parsed_q["explanation"]
+
+    # Then: Command mode
+    command_request = "list all files in the current directory"
+    mock_provider.set_response(
+        command_request,
+        {
+            "explanation": "I'll list all files including hidden ones in long format.",
+            "command": "ls -la",
+            "confidence": 95,
+        }
+    )
+
+    response_c = mock_provider.generate(command_request)
+    parsed_c = parse_response(response_c)
+
+    assert "command" in parsed_c
+    assert parsed_c["command"] == "ls -la"
+
+
+@pytest.mark.integration
+def test_question_mode_workflow_integration(mock_provider):
+    """
+    Test complete workflow for question mode from query to response.
+
+    This simulates the full flow through the system.
+    """
+    # Build system prompt with context
+    context = {
+        'cwd': get_cwd_context(),
+        'env': get_env_context(),
+    }
+
+    system_prompt = build_system_prompt(context)
+
+    # Verify prompt mentions question mode
+    assert "question" in system_prompt.lower() or "explanation" in system_prompt.lower()
+
+    # Test question
+    query = "What's the difference between cat and less?"
+
+    mock_provider.set_response(
+        query,
+        {
+            "explanation": "Both commands display file contents, but cat outputs everything at once while less allows scrolling through content page by page. Use cat for small files or piping output, and less for viewing large files interactively.",
+            "confidence": 95,
+        }
+    )
+
+    # Generate response
+    response = mock_provider.generate(query, context)
+    parsed = parse_response(response)
+
+    # Verify question mode behavior
+    assert "command" not in parsed
+    assert "cat" in parsed["explanation"] and "less" in parsed["explanation"]
+    assert parsed["confidence"] >= 90
+    assert "explanation" in parsed
