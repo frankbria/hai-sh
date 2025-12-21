@@ -200,12 +200,20 @@ _hai_trigger_widget() {
     local command
     local confidence
 
-    IFS='<<<SEPARATOR>>>' read -r conversation command confidence <<< "$parse_output"
+    # Use awk to split on multi-character delimiter
+    conversation=$(print -r "$parse_output" | awk 'BEGIN{RS="<<<SEPARATOR>>>"} NR==1{print}')
+    command=$(print -r "$parse_output" | awk 'BEGIN{RS="<<<SEPARATOR>>>"} NR==2{print}')
+    confidence=$(print -r "$parse_output" | awk 'BEGIN{RS="<<<SEPARATOR>>>"} NR==3{print}')
 
-    # Clean up whitespace
-    conversation=$(print -r "$conversation" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    command=$(print -r "$command" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    confidence=$(print -r "$confidence" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    # Clean up leading/trailing whitespace
+    # Remove leading whitespace
+    conversation="${conversation#"${conversation%%[![:space:]]*}"}"
+    command="${command#"${command%%[![:space:]]*}"}"
+    confidence="${confidence#"${confidence%%[![:space:]]*}"}"
+    # Remove trailing whitespace
+    conversation="${conversation%"${conversation##*[![:space:]]}"}"
+    command="${command%"${command##*[![:space:]]}"}"
+    confidence="${confidence%"${confidence##*[![:space:]]}"}"
 
     # Display dual-layer output
     _hai_display_dual_layer "$conversation" "$command" "$confidence"
@@ -217,34 +225,14 @@ _hai_trigger_widget() {
         return 0
     fi
 
-    # Prompt for confirmation
-    local response
-    print -n "Execute this command? [Y/n]: "
-    read response
+    # Put the command on the buffer for user to review and execute
+    # User can press Enter to execute, or edit/cancel manually
+    BUFFER="$command"
+    CURSOR="${#command}"
 
-    # Handle response
-    case "${response:l}" in  # Convert to lowercase
-        ""|y|yes)
-            print ""
-            print "Executing..."
-            print ""
-            # Execute the command using eval
-            eval "$command"
-            ;;
-        n|no)
-            print ""
-            print "Command execution cancelled"
-            print ""
-            ;;
-        *)
-            print ""
-            print "Invalid response. Command not executed."
-            print ""
-            ;;
-    esac
+    print "→ Command ready on prompt. Press Enter to execute, or edit/cancel as needed."
+    print ""
 
-    # Clear the buffer
-    BUFFER=""
     zle reset-prompt
 
     return 0

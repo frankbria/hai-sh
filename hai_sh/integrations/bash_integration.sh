@@ -199,12 +199,20 @@ _hai_trigger() {
     local command
     local confidence
 
-    IFS='<<<SEPARATOR>>>' read -r conversation command confidence <<< "$parse_output"
+    # Use awk to split on multi-character delimiter
+    conversation=$(echo "$parse_output" | awk 'BEGIN{RS="<<<SEPARATOR>>>"} NR==1{print}')
+    command=$(echo "$parse_output" | awk 'BEGIN{RS="<<<SEPARATOR>>>"} NR==2{print}')
+    confidence=$(echo "$parse_output" | awk 'BEGIN{RS="<<<SEPARATOR>>>"} NR==3{print}')
 
-    # Clean up whitespace
-    conversation=$(echo "$conversation" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    command=$(echo "$command" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    confidence=$(echo "$confidence" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    # Clean up leading/trailing whitespace
+    # Remove leading whitespace
+    conversation="${conversation#"${conversation%%[![:space:]]*}"}"
+    command="${command#"${command%%[![:space:]]*}"}"
+    confidence="${confidence#"${confidence%%[![:space:]]*}"}"
+    # Remove trailing whitespace
+    conversation="${conversation%"${conversation##*[![:space:]]}"}"
+    command="${command%"${command##*[![:space:]]}"}"
+    confidence="${confidence%"${confidence##*[![:space:]]}"}"
 
     # Display dual-layer output
     _hai_display_dual_layer "$conversation" "$command" "$confidence"
@@ -216,34 +224,13 @@ _hai_trigger() {
         return 0
     fi
 
-    # Prompt for confirmation
-    local response
-    read -p "Execute this command? [Y/n]: " response
+    # Put the command on the readline buffer for user to review and execute
+    # User can press Enter to execute, or edit/cancel manually
+    READLINE_LINE="$command"
+    READLINE_POINT="${#command}"
 
-    # Handle response
-    case "${response,,}" in  # Convert to lowercase
-        ""|y|yes)
-            echo ""
-            echo "Executing..."
-            echo ""
-            # Execute the command
-            eval "$command"
-            ;;
-        n|no)
-            echo ""
-            echo "Command execution cancelled"
-            echo ""
-            ;;
-        *)
-            echo ""
-            echo "Invalid response. Command not executed."
-            echo ""
-            ;;
-    esac
-
-    # Clear the readline buffer
-    READLINE_LINE=""
-    READLINE_POINT=0
+    echo "→ Command ready on prompt. Press Enter to execute, or edit/cancel as needed."
+    echo ""
 
     return 0
 }
