@@ -286,16 +286,44 @@ def test_main_with_query():
     """Test main with query arguments."""
     test_args = ['hai', 'find', 'large', 'files']
 
+    # Mock config with ollama provider
+    mock_config = {
+        'provider': 'ollama',
+        'providers': {
+            'ollama': {
+                'base_url': 'http://localhost:11434',
+                'model': 'llama3.2'
+            }
+        }
+    }
+
+    # Mock LLM response
+    mock_response = {
+        'conversation': 'I will search for large files.',
+        'command': 'find . -type f -size +100M',
+        'confidence': 85
+    }
+
+    # Mock execution result
+    mock_result = Mock()
+    mock_result.success = True
+    mock_result.exit_code = 0
+    mock_result.stdout = 'file1.bin\nfile2.bin'
+    mock_result.stderr = ''
+
     with patch('sys.argv', test_args):
         with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
-            with patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
-                exit_code = main()
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_provider') as mock_get_provider:
+                    with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
+                        with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
+                            with patch('hai_sh.__main__.execute_command', return_value=mock_result):
+                                with patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
+                                    exit_code = main()
 
     output = mock_stdout.getvalue()
     assert exit_code == 0
-    assert "hai v0.1 is under development" in output
-    assert "You asked: find large files" in output
-    assert "Configuration system" in output
+    assert "large files" in output or "find" in output
 
 
 @pytest.mark.unit
@@ -483,20 +511,45 @@ def test_integration_version_display():
 
 
 @pytest.mark.unit
-def test_integration_placeholder_message():
-    """Test v0.1 placeholder message."""
-    test_args = ['hai', 'test', 'command']
+def test_integration_complete_workflow():
+    """Test complete workflow from query to execution."""
+    test_args = ['hai', 'list', 'files']
+
+    # Mock config
+    mock_config = {
+        'provider': 'ollama',
+        'providers': {
+            'ollama': {
+                'base_url': 'http://localhost:11434',
+                'model': 'llama3.2'
+            }
+        }
+    }
+
+    # Mock LLM response
+    mock_response = {
+        'conversation': 'I will list all files in the current directory.',
+        'command': 'ls -la',
+        'confidence': 95
+    }
+
+    # Mock execution result
+    mock_result = Mock()
+    mock_result.success = True
+    mock_result.exit_code = 0
+    mock_result.stdout = 'file1.txt\nfile2.txt'
+    mock_result.stderr = ''
 
     with patch('sys.argv', test_args):
         with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
-            with patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
-                exit_code = main()
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_provider') as mock_get_provider:
+                    with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
+                        with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
+                            with patch('hai_sh.__main__.execute_command', return_value=mock_result):
+                                with patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
+                                    exit_code = main()
 
     output = mock_stdout.getvalue()
     assert exit_code == 0
-    assert "v0.1 is under development" in output
-    assert "Current status:" in output
-    assert "✓" in output  # Check marks for completed components
-    assert "⧗" in output  # Wait symbol for pending work
-    assert "Configuration system" in output
-    assert "LLM providers" in output
+    assert "list all files" in output or "ls" in output

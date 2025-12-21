@@ -46,8 +46,8 @@ def test_version_matches_expected():
     """Test that version matches expected value from pyproject.toml."""
     import hai_sh
 
-    # v0.1 should have version 0.0.1
-    assert hai_sh.__version__ == "0.0.1"
+    # v0.1 should have version 0.1.0
+    assert hai_sh.__version__ == "0.1.0"
 
 
 @pytest.mark.unit

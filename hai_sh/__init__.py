@@ -22,6 +22,7 @@ from hai_sh.context import (
     is_sensitive_env_var,
 )
 from hai_sh.providers import (
+    AnthropicProvider,
     BaseLLMProvider,
     OllamaProvider,
     OpenAIProvider,
@@ -128,6 +129,7 @@ __all__ = [
     "format_env_context",
     "is_sensitive_env_var",
     "get_safe_env_vars",
+    "AnthropicProvider",
     "BaseLLMProvider",
     "OllamaProvider",
     "OpenAIProvider",

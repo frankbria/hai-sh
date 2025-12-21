@@ -3,8 +3,19 @@ CLI entry point for hai.
 """
 
 import argparse
+import os
 import sys
+from pathlib import Path
+from typing import Optional
+
 from hai_sh import __version__, init_hai_directory
+from hai_sh.config import load_config, ConfigError as ConfigLoadError
+from hai_sh.context import get_cwd_context, get_git_context, get_env_context
+from hai_sh.providers import get_provider
+from hai_sh.prompt import build_system_prompt, generate_with_retry, parse_response
+from hai_sh.executor import execute_command, ExecutionResult
+from hai_sh.formatter import format_dual_layer
+from hai_sh.output import should_use_color
 
 
 # Help text and examples
@@ -200,40 +211,174 @@ def handle_execution_error(error: str):
     )
 
 
+def get_user_confirmation(command: str) -> bool:
+    """
+    Ask user to confirm command execution.
+
+    Args:
+        command: The command to execute
+
+    Returns:
+        bool: True if user confirms, False otherwise
+    """
+    print(f"\n{command}")
+    while True:
+        response = input("\nExecute this command? [y/N/e(dit)]: ").strip().lower()
+        if response in ('y', 'yes'):
+            return True
+        elif response in ('n', 'no', ''):
+            return False
+        elif response in ('e', 'edit'):
+            print("Command editing not implemented in v0.1")
+            print("Copy and paste the command to edit it manually.")
+            return False
+        else:
+            print("Please answer 'y', 'n', or 'e'")
+
+
 def main():
     """Main entry point for the hai CLI."""
+    debug_mode = "--debug" in sys.argv
+
     try:
         # Initialize ~/.hai/ directory structure on first run
         success, error = init_hai_directory()
         if not success and error:
             # Only show warning, don't fail - might already exist
-            if "--debug" in sys.argv:
+            if debug_mode:
                 handle_init_error(error)
 
         # Parse arguments
         parser = create_parser()
         args = parser.parse_args()
 
-        # Placeholder for future functionality
-        if args.query:
-            print("hai v0.1 is under development.")
-            print("Command execution will be available soon!")
-            print(f"\nYou asked: {' '.join(args.query)}")
-
-            # Show helpful information
-            print("\nCurrent status:")
-            print("  ✓ Configuration system")
-            print("  ✓ Context gathering (cwd, git, env)")
-            print("  ✓ LLM providers (OpenAI, Ollama)")
-            print("  ✓ Command execution engine")
-            print("  ✓ Shell integration (bash, zsh)")
-            print("  ⧗ Main CLI integration (coming soon)")
-
+        # If no query provided, show help
+        if not args.query:
+            parser.print_help()
             return 0
 
-        # If no arguments, show help
-        parser.print_help()
-        return 0
+        # Join query into single string
+        user_query = ' '.join(args.query)
+
+        # Set NO_COLOR environment variable if --no-color flag is set
+        if args.no_color:
+            os.environ['NO_COLOR'] = '1'
+
+        # Load configuration
+        config_path = Path(args.config) if args.config else None
+        try:
+            config = load_config(config_path=config_path, use_pydantic=False)
+        except ConfigLoadError as e:
+            handle_config_error(str(e))
+            return 1
+
+        # Gather context
+        context = {
+            'cwd': get_cwd_context(),
+            'git': get_git_context(),
+            'env': get_env_context()
+        }
+
+        # Build system prompt with context
+        system_prompt = build_system_prompt(context)
+
+        # Get LLM provider
+        provider_name = config.get('provider', 'ollama')
+        provider_config = config.get('providers', {}).get(provider_name, {})
+
+        try:
+            provider = get_provider(provider_name, provider_config)
+        except Exception as e:
+            handle_provider_error(f"Failed to initialize {provider_name} provider: {e}")
+            return 1
+
+        # Check if provider is available
+        if not provider.is_available():
+            handle_provider_error(
+                f"{provider_name} provider is not available. "
+                f"Check your configuration and API keys."
+            )
+            return 1
+
+        # Generate command using LLM
+        if debug_mode:
+            print(f"Debug: Using {provider_name} provider", file=sys.stderr)
+            print(f"Debug: Query: {user_query}", file=sys.stderr)
+
+        try:
+            # Combine system prompt and user query
+            full_prompt = f"{system_prompt}\n\nUser request: {user_query}\n\nRespond with JSON containing 'conversation', 'command', and 'confidence' fields."
+
+            # Generate with retry
+            response = generate_with_retry(
+                provider=provider,
+                prompt=full_prompt,
+                context=context,
+                max_retries=3
+            )
+
+        except Exception as e:
+            handle_provider_error(f"Failed to generate command: {e}")
+            return 1
+
+        # Extract fields from response
+        conversation = response.get('conversation', 'No explanation provided')
+        command = response.get('command', '')
+        confidence = response.get('confidence', 0)
+
+        if not command:
+            print_error(
+                "Generation Error",
+                "LLM did not generate a command",
+                "Try rephrasing your request or check provider configuration"
+            )
+            return 1
+
+        # Display conversation layer (what the AI is thinking)
+        use_colors = should_use_color()
+        print(f"\n{conversation}")
+
+        # Show command and confidence
+        if use_colors:
+            GREEN = "\033[92m"
+            YELLOW = "\033[93m"
+            RED = "\033[91m"
+            RESET = "\033[0m"
+            BOLD = "\033[1m"
+        else:
+            GREEN = YELLOW = RED = RESET = BOLD = ""
+
+        # Color code confidence
+        if confidence >= 80:
+            conf_color = GREEN
+        elif confidence >= 60:
+            conf_color = YELLOW
+        else:
+            conf_color = RED
+
+        print(f"\n{BOLD}Command:{RESET} {GREEN}{command}{RESET}")
+        print(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
+
+        # Ask for user confirmation
+        if not get_user_confirmation(command):
+            print("\nCommand execution cancelled")
+            return 0
+
+        # Execute command
+        print("\nExecuting...\n")
+        result = execute_command(command)
+
+        # Display result (just the execution layer, we already showed conversation)
+        if result.success:
+            if result.stdout:
+                print(result.stdout)
+        else:
+            print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
+            if result.stderr:
+                print(f"{RED}Error: {result.stderr}{RESET}")
+
+        # Return appropriate exit code
+        return 0 if result.success else result.exit_code
 
     except KeyboardInterrupt:
         print("\n\nInterrupted by user", file=sys.stderr)
@@ -248,7 +393,7 @@ def main():
         return 1
 
     except Exception as e:
-        if "--debug" in sys.argv:
+        if debug_mode:
             # Show full traceback in debug mode
             import traceback
             traceback.print_exc()
