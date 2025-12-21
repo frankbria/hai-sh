@@ -82,21 +82,21 @@ pipx --version
 
 #### 2. Install hai-sh via pipx
 
-**Note:** hai-sh is not yet published to PyPI. Until then, use one of these methods:
+```bash
+# Install from PyPI (recommended)
+pipx install hai-sh
+```
+
+**Alternative installation methods:**
 
 ```bash
-# Install from GitHub (recommended for pre-release)
+# Install from GitHub (for development/testing)
 pipx install git+https://github.com/frankbria/hai-sh.git
 
 # Or install from local directory
 git clone https://github.com/frankbria/hai-sh.git
 cd hai-sh
 pipx install .
-```
-
-Once published to PyPI, you'll be able to install with:
-```bash
-pipx install hai-sh  # Available after PyPI publication
 ```
 
 #### 3. Install Shell Integration
@@ -141,10 +141,15 @@ This method works but may cause dependency conflicts if you have other Python pa
 
 #### 1. Install from PyPI
 
-**Note:** hai-sh is not yet published to PyPI. Until then, use one of these methods:
+```bash
+# Install from PyPI
+pip3 install hai-sh
+```
+
+**Alternative installation methods:**
 
 ```bash
-# Install from GitHub
+# Install from GitHub (for development/testing)
 pip3 install git+https://github.com/frankbria/hai-sh.git
 
 # Or install from local directory

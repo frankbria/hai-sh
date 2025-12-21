@@ -4,8 +4,9 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-576%20passing-brightgreen.svg)](https://github.com/frankbria/hai-sh)
-[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](https://github.com/frankbria/hai-sh)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.1.0-blue.svg)](https://pypi.org/project/hai-sh/)
+[![Tests](https://img.shields.io/badge/tests-622%20passing-brightgreen.svg)](https://github.com/frankbria/hai-sh)
+[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen.svg)](https://github.com/frankbria/hai-sh)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 `hai` (pronounce like "hi") is a thin, context-aware wrapper around bash that brings natural language command generation directly to your terminal. Stop context-switching to look up git commands, bash syntax, or flags—just ask hai.
@@ -79,17 +80,21 @@ $ find . -type f -mtime -1
 - **Multi-step Commands**: Handles complex workflows with `&&` chaining
 - **Environment Preservation**: Safe environment variable handling
 - **Git Integration**: Context-aware git operations
-- **Comprehensive Testing**: 576 tests, 92% coverage
+- **Comprehensive Testing**: 622 tests, 82% coverage
 
 ## 🚀 Status
 
-**Current Version:** v0.1 (Pre-release)
+**Current Version:** v0.1.0 (Published on PyPI)
 
 hai follows an agile development approach with frequent version increments.
 
 ### What's New (Updated: 2024-12-20)
 
-**v0.1 Documentation Release:**
+**v0.1.0 PyPI Release:**
+- ✅ Published to PyPI - install with `pipx install hai-sh`
+- ✅ 622 tests passing (100% pass rate)
+- ✅ Shell integration with Ctrl+X Ctrl+H keyboard shortcut
+- ✅ Three LLM providers: OpenAI, Anthropic, Ollama
 - ✅ Complete installation guide ([INSTALL.md](./INSTALL.md))
 - ✅ Comprehensive configuration guide ([CONFIGURATION.md](./CONFIGURATION.md))
 - ✅ 20+ usage examples and tutorial ([USAGE.md](./USAGE.md))
