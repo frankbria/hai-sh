@@ -19,7 +19,9 @@ class OpenAIProvider(BaseLLMProvider):
     """
     OpenAI API provider implementation.
 
-    Supports GPT-4, GPT-3.5, and other OpenAI models via the official API.
+    Supports GPT-4, GPT-3.5, o1 series, and other OpenAI models via the official API.
+    Automatically uses the correct API parameters (max_tokens vs max_completion_tokens)
+    based on the model being used.
 
     Example:
         >>> config = {
@@ -42,6 +44,7 @@ class OpenAIProvider(BaseLLMProvider):
                 - model: Model name (default: "gpt-4o-mini")
                 - timeout: Request timeout in seconds (default: 30)
                 - max_tokens: Maximum tokens in response (default: 1000)
+                  Note: Automatically mapped to max_completion_tokens for o1 series models
                 - temperature: Sampling temperature 0-2 (default: 0.7)
 
         Raises:
@@ -66,6 +69,23 @@ class OpenAIProvider(BaseLLMProvider):
         self.model = self.config.get("model", "gpt-4o-mini")
         self.max_tokens = self.config.get("max_tokens", 1000)
         self.temperature = self.config.get("temperature", 0.7)
+
+    def _uses_max_completion_tokens(self) -> bool:
+        """
+        Determine if the current model requires max_completion_tokens parameter.
+
+        OpenAI's newer models (o1 series) require max_completion_tokens instead of
+        the deprecated max_tokens parameter.
+
+        Returns:
+            bool: True if model requires max_completion_tokens, False otherwise
+        """
+        # o1 series models require max_completion_tokens
+        if self.model.startswith("o1-") or self.model.startswith("o1"):
+            return True
+
+        # All other models use max_tokens
+        return False
 
     def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
         """
@@ -99,13 +119,22 @@ class OpenAIProvider(BaseLLMProvider):
                 "content": prompt
             })
 
+            # Build API request parameters
+            # Newer models (o1 series) require max_completion_tokens
+            api_params = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature
+            }
+
+            # Use appropriate token limit parameter based on model
+            if self._uses_max_completion_tokens():
+                api_params["max_completion_tokens"] = self.max_tokens
+            else:
+                api_params["max_tokens"] = self.max_tokens
+
             # Make API request
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature
-            )
+            response = self.client.chat.completions.create(**api_params)
 
             # Extract and return response
             return response.choices[0].message.content.strip()
