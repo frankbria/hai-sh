@@ -128,12 +128,16 @@ class OpenAIProvider(BaseLLMProvider):
             })
 
             # Build API request parameters
-            # Newer models (o1 series) require max_completion_tokens
+            # Newer models (o1, gpt-5 series) have different parameter requirements
             api_params = {
                 "model": self.model,
-                "messages": messages,
-                "temperature": self.temperature
+                "messages": messages
             }
+
+            # Some models (o1, gpt-5) don't support temperature parameter
+            # Only add temperature if the model supports it
+            if not (self.model.startswith("o1") or self.model.startswith("gpt-5")):
+                api_params["temperature"] = self.temperature
 
             # Use appropriate token limit parameter based on model
             if self._uses_max_completion_tokens():

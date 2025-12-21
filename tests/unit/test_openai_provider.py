@@ -352,6 +352,42 @@ def test_generate_uses_max_completion_tokens_for_o1_models(mock_openai_client):
 
 
 @pytest.mark.unit
+def test_generate_excludes_temperature_for_newer_models(mock_openai_client):
+    """Test that o1 and gpt-5 models don't include temperature parameter."""
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = "response"
+
+    # Test o1 model
+    config_o1 = {
+        "api_key": "sk-test",
+        "model": "o1-preview",
+        "temperature": 0.7
+    }
+    provider = OpenAIProvider(config_o1)
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        provider.generate("test")
+
+        call_args = mock_create.call_args
+        assert 'temperature' not in call_args.kwargs
+
+    # Test gpt-5 model
+    config_gpt5 = {
+        "api_key": "sk-test",
+        "model": "gpt-5-nano",
+        "temperature": 0.7
+    }
+    provider = OpenAIProvider(config_gpt5)
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        provider.generate("test")
+
+        call_args = mock_create.call_args
+        assert 'temperature' not in call_args.kwargs
+
+
+@pytest.mark.unit
 def test_generate_uses_max_tokens_for_legacy_models(mock_openai_client):
     """Test that legacy models use max_tokens parameter."""
     # Test with gpt-4
