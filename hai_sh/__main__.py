@@ -307,7 +307,7 @@ def main():
 
         try:
             # Combine system prompt and user query
-            full_prompt = f"{system_prompt}\n\nUser request: {user_query}\n\nRespond with JSON containing 'conversation', 'command', and 'confidence' fields."
+            full_prompt = f"{system_prompt}\n\nUser request: {user_query}"
 
             # Generate with retry
             response = generate_with_retry(
@@ -322,23 +322,12 @@ def main():
             return 1
 
         # Extract fields from response
-        conversation = response.get('conversation', 'No explanation provided')
-        command = response.get('command', '')
+        explanation = response.get('explanation', 'No explanation provided')
+        command = response.get('command', '')  # May be empty for question mode
         confidence = response.get('confidence', 0)
 
-        if not command:
-            print_error(
-                "Generation Error",
-                "LLM did not generate a command",
-                "Try rephrasing your request or check provider configuration"
-            )
-            return 1
-
-        # Display conversation layer (what the AI is thinking)
+        # Determine color settings
         use_colors = should_use_color()
-        print(f"\n{conversation}")
-
-        # Show command and confidence
         if use_colors:
             GREEN = "\033[92m"
             YELLOW = "\033[93m"
@@ -356,6 +345,17 @@ def main():
         else:
             conf_color = RED
 
+        # Check if this is question mode (no command) or command mode
+        if not command:
+            # Question Mode: Display explanation without command execution
+            print(f"\n{explanation}")
+            print(f"\n{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
+            return 0
+
+        # Command Mode: Display explanation, show command, ask for confirmation, execute
+        print(f"\n{explanation}")
+
+        # Show command and confidence
         print(f"\n{BOLD}Command:{RESET} {GREEN}{command}{RESET}")
         print(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
 
@@ -368,7 +368,7 @@ def main():
         print("\nExecuting...\n")
         result = execute_command(command)
 
-        # Display result (just the execution layer, we already showed conversation)
+        # Display result
         if result.success:
             if result.stdout:
                 print(result.stdout)

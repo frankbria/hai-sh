@@ -10,22 +10,37 @@ from typing import Any, Optional
 
 
 # System prompt template
-SYSTEM_PROMPT_TEMPLATE = """You are hai, a helpful terminal assistant that generates bash commands based on natural language requests.
+SYSTEM_PROMPT_TEMPLATE = """You are hai, a helpful terminal assistant that helps users with terminal commands and answers their questions.
 
 ## Your Role
-You help users execute terminal commands by understanding their intent and generating safe, effective bash commands.
+You have two modes of operation:
+1. **Command Mode**: Generate bash commands when users request actions
+2. **Question Mode**: Answer informational questions without generating commands
 
 ## Response Format
-You MUST respond with valid JSON in this exact format:
+You MUST respond with valid JSON in one of these formats:
+
+**Command Mode** (when user requests an action):
 {
     "explanation": "Brief explanation of what the command does",
     "command": "the actual bash command to execute",
     "confidence": 85
 }
 
-- explanation: 1-2 sentences explaining the command's purpose
-- command: Valid bash command (single line or using && for multiple steps)
-- confidence: Integer 0-100 indicating how confident you are this command is correct
+**Question Mode** (when user asks a question):
+{
+    "explanation": "Detailed answer to the user's question",
+    "confidence": 95
+}
+
+### Field Descriptions
+- explanation: 1-3 sentences (command purpose OR answer to question)
+- command: Valid bash command (ONLY include if user requests an action)
+- confidence: Integer 0-100 indicating confidence in your response
+
+### Detecting Questions vs Commands
+**Questions typically contain**: "what", "why", "how", "difference between", "explain", "tell me about", "which should I", "when to use"
+**Commands typically contain**: "show", "find", "list", "create", "delete", "search", action verbs
 
 ## Context
 {context}
@@ -51,20 +66,14 @@ DO generate commands that:
 
 ## Examples
 
+### Command Mode Examples
+
 User: "show me large files in my home directory"
 Response:
 {
     "explanation": "I'll search for files larger than 100MB in your home directory and sort by size.",
     "command": "find ~ -type f -size +100M -exec du -h {} + | sort -rh | head -20",
     "confidence": 90
-}
-
-User: "what changed in the last commit?"
-Response:
-{
-    "explanation": "I'll show the diff for the most recent commit.",
-    "command": "git show HEAD",
-    "confidence": 95
 }
 
 User: "list python files modified today"
@@ -75,12 +84,36 @@ Response:
     "confidence": 90
 }
 
+### Question Mode Examples
+
+User: "What's the difference between ls -la and ls -lah?"
+Response:
+{
+    "explanation": "Both commands list all files including hidden ones (-a) in long format (-l). The only difference is the -h flag in 'ls -lah', which displays file sizes in human-readable format (KB, MB, GB) instead of bytes. For example, instead of 1048576, it shows 1.0M.",
+    "confidence": 95
+}
+
+User: "How do I use git rebase?"
+Response:
+{
+    "explanation": "Git rebase moves or combines commits from one branch onto another. Use 'git rebase <branch>' to rebase current branch onto <branch>, or 'git rebase -i HEAD~N' for interactive rebase of last N commits. It's useful for cleaning up commit history before merging, but avoid rebasing commits that have been pushed to shared branches.",
+    "confidence": 90
+}
+
+User: "Why would I use grep instead of awk?"
+Response:
+{
+    "explanation": "Use grep for simple pattern matching and filtering lines. Use awk for complex text processing that requires field extraction, arithmetic, or conditional logic. Grep is faster and simpler for basic searches, while awk is more powerful for data manipulation and formatted output.",
+    "confidence": 95
+}
+
 ## Important
 - Always respond with valid JSON
-- Keep explanations concise
-- Use standard bash commands
-- Prefer simple, readable commands
-- Only use one command unless multiple steps are clearly needed"""
+- Include "command" field ONLY when user requests an action
+- Omit "command" field when answering informational questions
+- Keep explanations concise (1-3 sentences)
+- For commands: Use standard bash, prefer simple readable commands
+- For questions: Provide clear, helpful answers"""
 
 
 # Context template for variable substitution
@@ -170,20 +203,29 @@ def parse_response(response: str) -> dict[str, Any]:
     """
     Parse LLM JSON response into structured format.
 
+    Supports both command mode (with command field) and question mode (without command field).
+
     Args:
         response: Raw LLM response (should be JSON)
 
     Returns:
-        dict: Parsed response with explanation, command, confidence
+        dict: Parsed response with explanation, confidence, and optionally command
 
     Raises:
         ValueError: If response is not valid JSON or missing required fields
 
-    Example:
+    Examples:
+        >>> # Command mode
         >>> response = '{"explanation": "test", "command": "ls", "confidence": 90}'
         >>> parsed = parse_response(response)
         >>> parsed["command"]
         'ls'
+
+        >>> # Question mode
+        >>> response = '{"explanation": "answer here", "confidence": 95}'
+        >>> parsed = parse_response(response)
+        >>> "command" in parsed
+        False
     """
     try:
         # Try to parse as JSON
@@ -215,20 +257,22 @@ def parse_response(response: str) -> dict[str, Any]:
         else:
             raise ValueError(f"Response is not valid JSON: {e}")
 
-    # Validate required fields
-    required_fields = ["explanation", "command", "confidence"]
+    # Validate required fields (command is now optional)
+    required_fields = ["explanation", "confidence"]
     missing = [field for field in required_fields if field not in data]
 
     if missing:
         raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
-    # Validate types
+    # Validate explanation
     if not isinstance(data["explanation"], str):
         raise ValueError("'explanation' must be a string")
 
-    if not isinstance(data["command"], str):
+    # Validate command if present
+    if "command" in data and not isinstance(data["command"], str):
         raise ValueError("'command' must be a string")
 
+    # Validate confidence
     if not isinstance(data["confidence"], (int, float)):
         raise ValueError("'confidence' must be a number")
 
@@ -237,12 +281,17 @@ def parse_response(response: str) -> dict[str, Any]:
     if confidence < 0 or confidence > 100:
         raise ValueError("'confidence' must be between 0 and 100")
 
-    # Return normalized response
-    return {
+    # Build response
+    result = {
         "explanation": data["explanation"].strip(),
-        "command": data["command"].strip(),
         "confidence": confidence
     }
+
+    # Add command if present
+    if "command" in data:
+        result["command"] = data["command"].strip()
+
+    return result
 
 
 def validate_command(command: str) -> tuple[bool, Optional[str]]:
@@ -521,8 +570,9 @@ def generate_with_retry(
     retry_prompt_suffix: str = "\n\nPlease respond with valid JSON only."
 ) -> dict[str, Any]:
     """
-    Generate command with automatic retry on parse failures.
+    Generate response with automatic retry on parse failures.
 
+    Supports both command generation and question answering modes.
     This function wraps provider.generate() with retry logic, rate limiting,
     and exponential backoff. If the LLM response cannot be parsed, it retries
     with additional instructions.
@@ -535,18 +585,24 @@ def generate_with_retry(
         retry_prompt_suffix: Additional instruction added on retry
 
     Returns:
-        dict: Parsed response with explanation, command, confidence
+        dict: Parsed response with explanation, confidence, and optionally command
 
     Raises:
         RuntimeError: If rate limit is exceeded
         ValueError: If all retry attempts fail
 
-    Example:
+    Examples:
+        >>> # Command mode
         >>> from hai_sh.providers import OllamaProvider
         >>> provider = OllamaProvider({"model": "llama3.2"})
         >>> result = generate_with_retry(provider, "list files")
         >>> "command" in result
         True
+
+        >>> # Question mode
+        >>> result = generate_with_retry(provider, "What does ls do?")
+        >>> "command" in result
+        False
     """
     import time
     from hai_sh.rate_limit import check_rate_limit
@@ -573,11 +629,12 @@ def generate_with_retry(
             # Try to parse the response
             parsed = parse_response(response)
 
-            # Validate the command is safe
-            is_safe, safety_error = validate_command(parsed["command"])
-            if not is_safe:
-                # Add safety context to the command response
-                parsed["safety_warning"] = safety_error
+            # Validate the command is safe (only if command is present)
+            if "command" in parsed:
+                is_safe, safety_error = validate_command(parsed["command"])
+                if not is_safe:
+                    # Add safety context to the command response
+                    parsed["safety_warning"] = safety_error
 
             return parsed
 

@@ -287,14 +287,17 @@ def test_parse_response_missing_explanation():
 
 @pytest.mark.unit
 def test_parse_response_missing_command():
-    """Test parsing JSON missing command field."""
+    """Test parsing JSON with missing command field (question mode)."""
     response = json.dumps({
-        "explanation": "Test",
+        "explanation": "Test answer",
         "confidence": 90
     })
 
-    with pytest.raises(ValueError, match="Missing required fields.*command"):
-        parse_response(response)
+    # Command is now optional - should parse successfully
+    parsed = parse_response(response)
+    assert parsed["explanation"] == "Test answer"
+    assert parsed["confidence"] == 90
+    assert "command" not in parsed  # Verify command field is not present
 
 
 @pytest.mark.unit
