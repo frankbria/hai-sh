@@ -167,6 +167,11 @@ _hai_trigger_widget() {
     BUFFER=""
     zle redisplay
 
+    # Show processing message for user feedback
+    print ""
+    print "🤖 hai: Processing '$query'..."
+    print ""
+
     # Call hai with --suggest-only to get JSON response
     local json_response
     if ! json_response=$(hai --suggest-only "$query" 2>&1); then

@@ -168,6 +168,11 @@ _hai_trigger() {
     READLINE_LINE=""
     READLINE_POINT=0
 
+    # Show processing message for user feedback
+    echo ""
+    echo "🤖 hai: Processing '$query'..."
+    echo ""
+
     # Call hai with --suggest-only to get JSON response
     local json_response
     if ! json_response=$(hai --suggest-only "$query" 2>&1); then
