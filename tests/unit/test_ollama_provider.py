@@ -549,3 +549,133 @@ def test_format_prompt_git_not_repo():
     # Should not include git info when not in a repo
     assert "Git" not in formatted
     assert formatted == "test"
+
+
+# ============================================================================
+# System Prompt Tests (TDD - New Feature)
+# ============================================================================
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_with_system_prompt_parameter(mock_post):
+    """Test generate accepts system_prompt parameter."""
+    provider = OllamaProvider({})
+
+    system_prompt = "You are a bash command generator. Always respond in JSON format."
+
+    # Mock streaming response
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_response.iter_lines = Mock(return_value=[
+        b'{"response": "ls", "done": false}',
+        b'{"response": " -la", "done": true}'
+    ])
+    mock_post.return_value = mock_response
+
+    response = provider.generate("List files", system_prompt=system_prompt)
+
+    assert response == "ls -la"
+
+    # Verify the prompt includes system_prompt
+    call_args = mock_post.call_args
+    request_data = call_args.kwargs['json']
+    assert "bash command generator" in request_data['prompt']
+    assert "JSON format" in request_data['prompt']
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_system_prompt_overrides_default(mock_post):
+    """Test that system_prompt replaces the default instructions."""
+    provider = OllamaProvider({})
+
+    system_prompt = "Custom system instructions."
+
+    # Mock streaming response
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_response.iter_lines = Mock(return_value=[
+        b'{"response": "response", "done": true}'
+    ])
+    mock_post.return_value = mock_response
+
+    provider.generate("test", system_prompt=system_prompt)
+
+    # Verify custom system prompt is used
+    call_args = mock_post.call_args
+    request_data = call_args.kwargs['json']
+    assert "Custom system instructions" in request_data['prompt']
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_system_prompt_with_context(mock_post):
+    """Test system_prompt is combined with context."""
+    provider = OllamaProvider({})
+
+    system_prompt = "You are a JSON command generator."
+    context = {
+        "cwd": "/home/user/project",
+        "git": {"is_repo": True, "branch": "main", "has_changes": False}
+    }
+
+    # Mock streaming response
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_response.iter_lines = Mock(return_value=[
+        b'{"response": "git status", "done": true}'
+    ])
+    mock_post.return_value = mock_response
+
+    provider.generate("Check git", system_prompt=system_prompt, context=context)
+
+    # Verify both system prompt and context are in the request
+    call_args = mock_post.call_args
+    request_data = call_args.kwargs['json']
+    prompt = request_data['prompt']
+
+    assert "JSON command generator" in prompt
+    assert "/home/user/project" in prompt
+    assert "main" in prompt
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_without_system_prompt_uses_default(mock_post):
+    """Test that omitting system_prompt uses default behavior (backward compatibility)."""
+    provider = OllamaProvider({})
+
+    # Mock streaming response
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_response.iter_lines = Mock(return_value=[
+        b'{"response": "echo hello", "done": true}'
+    ])
+    mock_post.return_value = mock_response
+
+    # Call without system_prompt parameter
+    response = provider.generate("Say hello")
+
+    assert response == "echo hello"
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_empty_system_prompt(mock_post):
+    """Test generate handles empty system_prompt gracefully."""
+    provider = OllamaProvider({})
+
+    # Mock streaming response
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_response.iter_lines = Mock(return_value=[
+        b'{"response": "response", "done": true}'
+    ])
+    mock_post.return_value = mock_response
+
+    # Empty string should work without errors
+    provider.generate("test", system_prompt="")
+
+    # Should still make the request
+    assert mock_post.called

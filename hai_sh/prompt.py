@@ -227,6 +227,10 @@ def parse_response(response: str) -> dict[str, Any]:
         >>> "command" in parsed
         False
     """
+    # Check for empty response first
+    if not response or not response.strip():
+        raise ValueError("LLM returned empty response")
+
     try:
         # Try to parse as JSON
         data = json.loads(response.strip())
@@ -567,7 +571,8 @@ def generate_with_retry(
     prompt: str,
     context: Optional[dict[str, Any]] = None,
     max_retries: int = 3,
-    retry_prompt_suffix: str = "\n\nPlease respond with valid JSON only."
+    retry_prompt_suffix: str = "\n\nPlease respond with valid JSON only.",
+    system_prompt: Optional[str] = None
 ) -> dict[str, Any]:
     """
     Generate response with automatic retry on parse failures.
@@ -583,6 +588,7 @@ def generate_with_retry(
         context: Optional context dictionary
         max_retries: Maximum number of retry attempts (default: 3)
         retry_prompt_suffix: Additional instruction added on retry
+        system_prompt: Optional system prompt with JSON format instructions
 
     Returns:
         dict: Parsed response with explanation, confidence, and optionally command
@@ -624,7 +630,7 @@ def generate_with_retry(
                 time.sleep(backoff_seconds)
 
             # Generate response from LLM
-            response = provider.generate(current_prompt, context)
+            response = provider.generate(current_prompt, context, system_prompt)
 
             # Try to parse the response
             parsed = parse_response(response)

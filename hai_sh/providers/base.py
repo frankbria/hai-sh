@@ -40,7 +40,12 @@ class BaseLLMProvider(ABC):
         self.config = config
 
     @abstractmethod
-    def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        context: Optional[dict[str, Any]] = None,
+        system_prompt: Optional[str] = None
+    ) -> str:
         """
         Generate a response from the LLM.
 
@@ -51,6 +56,10 @@ class BaseLLMProvider(ABC):
             prompt: The input prompt/query to send to the LLM
             context: Optional context dictionary with additional information
                     (e.g., current directory, git state, environment vars)
+            system_prompt: Optional system prompt containing instructions for
+                          the LLM (e.g., JSON format requirements, role definition).
+                          This should be used as a system message, not a user message,
+                          to ensure the LLM properly follows format instructions.
 
         Returns:
             str: The generated response from the LLM
@@ -60,9 +69,13 @@ class BaseLLMProvider(ABC):
 
         Example:
             >>> provider = get_provider("openai", config)
-            >>> response = provider.generate("List files in current directory")
+            >>> system = "Respond in JSON format with 'command' key."
+            >>> response = provider.generate(
+            ...     "List files in current directory",
+            ...     system_prompt=system
+            ... )
             >>> print(response)
-            'ls -la'
+            '{"command": "ls -la"}'
         """
         pass
 

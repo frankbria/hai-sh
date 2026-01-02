@@ -65,13 +65,19 @@ class OllamaProvider(BaseLLMProvider):
         self.stream = self.config.get("stream", True)
         self.temperature = self.config.get("temperature", 0.7)
 
-    def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        context: Optional[dict[str, Any]] = None,
+        system_prompt: Optional[str] = None
+    ) -> str:
         """
         Generate a response using Ollama's API.
 
         Args:
             prompt: The input prompt/query
             context: Optional context dictionary (e.g., cwd, git state)
+            system_prompt: Optional system prompt with JSON format instructions
 
         Returns:
             str: Generated response from Ollama
@@ -80,8 +86,8 @@ class OllamaProvider(BaseLLMProvider):
             RuntimeError: If Ollama is not running or request fails
         """
         try:
-            # Build the full prompt with context
-            full_prompt = self._format_prompt(prompt, context)
+            # Build the full prompt with system prompt and context
+            full_prompt = self._format_prompt(prompt, context, system_prompt)
 
             # Prepare API request
             url = f"{self.base_url}/api/generate"
@@ -193,44 +199,56 @@ class OllamaProvider(BaseLLMProvider):
         except Exception:
             return False
 
-    def _format_prompt(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def _format_prompt(
+        self,
+        prompt: str,
+        context: Optional[dict[str, Any]] = None,
+        system_prompt: Optional[str] = None
+    ) -> str:
         """
-        Format prompt with optional context.
+        Format prompt with optional system prompt and context.
 
         Args:
             prompt: User prompt
             context: Optional context dictionary
+            system_prompt: Optional system prompt with format instructions
 
         Returns:
-            str: Formatted prompt with context
+            str: Formatted prompt with system prompt and context
         """
-        if not context:
-            return prompt
+        parts = []
 
-        # Build context prefix
-        context_parts = []
+        # Add system prompt first if provided
+        if system_prompt and system_prompt.strip():
+            parts.append(system_prompt)
 
-        if "cwd" in context:
-            context_parts.append(f"Current directory: {context['cwd']}")
+        # Build context info if provided
+        if context:
+            context_parts = []
 
-        if "git" in context and context["git"].get("is_repo"):
-            git_info = context["git"]
-            context_parts.append(f"Git branch: {git_info.get('branch', 'unknown')}")
-            if git_info.get("has_changes"):
-                context_parts.append("Git status: uncommitted changes")
+            if "cwd" in context:
+                context_parts.append(f"Current directory: {context['cwd']}")
 
-        if "env" in context:
-            env_info = context["env"]
-            if "user" in env_info:
-                context_parts.append(f"User: {env_info['user']}")
-            if "shell" in env_info:
-                context_parts.append(f"Shell: {env_info['shell']}")
+            if "git" in context and context["git"].get("is_repo"):
+                git_info = context["git"]
+                context_parts.append(f"Git branch: {git_info.get('branch', 'unknown')}")
+                if git_info.get("has_changes"):
+                    context_parts.append("Git status: uncommitted changes")
 
-        if context_parts:
-            context_str = "\n".join(context_parts)
-            return f"{context_str}\n\n{prompt}"
+            if "env" in context:
+                env_info = context["env"]
+                if "user" in env_info:
+                    context_parts.append(f"User: {env_info['user']}")
+                if "shell" in env_info:
+                    context_parts.append(f"Shell: {env_info['shell']}")
 
-        return prompt
+            if context_parts:
+                parts.extend(context_parts)
+
+        # Add user prompt last
+        parts.append(prompt)
+
+        return "\n\n".join(parts)
 
     def _handle_streaming_response(self, response: requests.Response) -> str:
         """
