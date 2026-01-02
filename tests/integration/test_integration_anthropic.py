@@ -191,8 +191,8 @@ class TestAnthropicResponseParsing:
 class TestAnthropicContextInjection:
     """Test context injection with Anthropic provider."""
 
-    def test_system_message_formatting(self, test_config_anthropic):
-        """Test that Anthropic properly receives system messages."""
+    def test_basic_generation_with_system_message(self, test_config_anthropic):
+        """Test basic command generation with system message context."""
         stdout, stderr, exit_code = run_hai(
             "show current directory",
             test_config_anthropic,
@@ -287,14 +287,15 @@ class TestAnthropicComplexScenarios:
 @pytest.mark.requires_api_key
 @skip_if_no_anthropic
 class TestAnthropicRateLimiting:
-    """Test rate limiting behavior with Anthropic provider."""
+    """Test basic request handling (rate limiting placeholder for future testing)."""
 
-    def test_rate_limit_handling(self, test_config_anthropic):
-        """Test that rate limits are handled gracefully (if encountered)."""
-        # This test makes a single request and expects it to succeed
-        # In practice, we won't hit rate limits with normal testing
-        # but this validates the request flow works correctly
+    def test_single_request_completes(self, test_config_anthropic):
+        """Test that a single request completes successfully.
 
+        Note: This is a placeholder for future rate limiting tests.
+        In practice, we won't hit rate limits with normal testing,
+        but this validates the request flow works correctly.
+        """
         stdout, stderr, exit_code = run_hai(
             "list files",
             test_config_anthropic,

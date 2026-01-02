@@ -57,29 +57,26 @@ def get_available_providers() -> List[str]:
     return providers
 
 
-def get_provider_configs(
-    test_config_openai,
-    test_config_anthropic,
-    test_config_ollama,
-) -> Dict[str, Path]:
+def get_provider_configs(request) -> Dict[str, Path]:
     """
     Get mapping of provider names to their config files.
 
+    Uses request.getfixturevalue() to defer fixture evaluation until needed,
+    preventing unnecessary pytest.skip calls for unavailable providers.
+
     Args:
-        test_config_openai: OpenAI config fixture
-        test_config_anthropic: Anthropic config fixture
-        test_config_ollama: Ollama config fixture
+        request: Pytest request fixture
 
     Returns:
         Dictionary mapping provider names to config file paths
     """
     configs = {}
     if is_openai_available():
-        configs["openai"] = test_config_openai
+        configs["openai"] = request.getfixturevalue("test_config_openai")
     if is_anthropic_available():
-        configs["anthropic"] = test_config_anthropic
+        configs["anthropic"] = request.getfixturevalue("test_config_anthropic")
     if is_ollama_available():
-        configs["ollama"] = test_config_ollama
+        configs["ollama"] = request.getfixturevalue("test_config_ollama")
     return configs
 
 
@@ -93,22 +90,13 @@ class TestCrossProviderConsistency:
         assert len(available) > 0, \
             "At least one provider must be available for cross-provider tests"
 
-    def test_consistent_command_generation(
-        self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
-    ):
+    def test_consistent_command_generation(self, request):
         """Test that all providers generate similar commands for same query."""
         providers = get_available_providers()
         if len(providers) < 2:
             pytest.skip("Need at least 2 providers for consistency testing")
 
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         query = "list all files"
         results = {}
@@ -132,22 +120,13 @@ class TestCrossProviderConsistency:
             assert any(cmd in result["stdout"].lower() for cmd in ["ls", "list"]), \
                 f"{provider_name} did not generate expected ls command"
 
-    def test_consistent_question_detection(
-        self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
-    ):
+    def test_consistent_question_detection(self, request):
         """Test that all providers correctly identify questions vs commands."""
         providers = get_available_providers()
         if len(providers) < 2:
             pytest.skip("Need at least 2 providers for consistency testing")
 
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         # Test with a clear question
         question = "What is the ls command used for?"
@@ -171,29 +150,20 @@ class TestCrossProviderConsistency:
             assert "Execute this command?" not in result["stdout"], \
                 f"{provider_name} incorrectly treated question as command"
 
-    def test_consistent_confidence_scoring(
-        self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
-    ):
+    def test_consistent_confidence_scoring(self, request):
         """Test that all providers return confidence scores in similar ranges."""
         providers = get_available_providers()
         if len(providers) < 2:
             pytest.skip("Need at least 2 providers for consistency testing")
 
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         # Test with a clear, unambiguous query
         query = "show current directory"
         confidence_scores = {}
 
         for provider_name in providers:
-            stdout, stderr, exit_code = run_hai(query, configs[provider_name])
+            stdout, _stderr, _exit_code = run_hai(query, configs[provider_name])
 
             # Extract confidence score
             for line in stdout.split("\n"):
@@ -214,13 +184,7 @@ class TestCrossProviderConsistency:
             assert score > 60, \
                 f"{provider_name} returned unexpectedly low confidence: {score}%"
 
-    def test_consistent_error_handling(
-        self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
-        tmp_path,
-    ):
+    def test_consistent_error_handling(self, request):
         """Test that all providers handle errors gracefully."""
         providers = get_available_providers()
         if len(providers) < 1:
@@ -228,16 +192,12 @@ class TestCrossProviderConsistency:
 
         # Note: We can't easily test invalid credentials for all providers
         # without breaking the configs, so we just test that normal flow works
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         query = "list files"
 
         for provider_name in providers:
-            stdout, stderr, exit_code = run_hai(query, configs[provider_name])
+            _stdout, stderr, exit_code = run_hai(query, configs[provider_name])
 
             # All providers should handle the request (success or graceful failure)
             assert exit_code == 0 or stderr, \
@@ -245,9 +205,7 @@ class TestCrossProviderConsistency:
 
     def test_consistent_context_usage(
         self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
+        request,
         sample_git_repo,
         monkeypatch,
     ):
@@ -256,11 +214,7 @@ class TestCrossProviderConsistency:
         if len(providers) < 2:
             pytest.skip("Need at least 2 providers for consistency testing")
 
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         # Change to git repo directory
         monkeypatch.chdir(sample_git_repo)
@@ -290,9 +244,7 @@ class TestCrossProviderComplexScenarios:
 
     def test_multi_word_file_operations(
         self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
+        request,
         tmp_path,
         monkeypatch,
     ):
@@ -301,11 +253,7 @@ class TestCrossProviderComplexScenarios:
         if len(providers) < 1:
             pytest.skip("Need at least 1 provider for testing")
 
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         # Create test directory
         test_dir = tmp_path / "test_files"
@@ -326,22 +274,13 @@ class TestCrossProviderComplexScenarios:
                 for cmd in ["touch", "echo", "cat", ">"]
             ), f"{provider_name} did not generate file creation command"
 
-    def test_pipeline_command_generation(
-        self,
-        test_config_openai,
-        test_config_anthropic,
-        test_config_ollama,
-    ):
+    def test_pipeline_command_generation(self, request):
         """Test that providers can generate pipeline commands."""
         providers = get_available_providers()
         if len(providers) < 1:
             pytest.skip("Need at least 1 provider for testing")
 
-        configs = get_provider_configs(
-            test_config_openai,
-            test_config_anthropic,
-            test_config_ollama,
-        )
+        configs = get_provider_configs(request)
 
         query = "count the number of files in this directory"
 

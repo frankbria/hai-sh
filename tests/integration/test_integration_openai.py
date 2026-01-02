@@ -233,11 +233,16 @@ class TestOpenAIModelSpecificParameters:
         )
 
         # Test should work (provider handles parameter conversion internally)
-        # If o1 model is not available, the test will fail with a model error
-        # which is acceptable - we're testing the parameter handling
+        # If o1 model is not available, mark as expected failure
         if exit_code == 0:
             assert stdout, "No output received"
             assert "Confidence:" in stdout, "Missing confidence score"
+        else:
+            # Model may not be available - mark as xfail with details
+            pytest.xfail(
+                f"o1-mini model not available or failed. "
+                f"Exit code: {exit_code}, stderr: {stderr}"
+            )
 
     def test_gpt4_legacy_parameters(self, test_config_openai):
         """Test that legacy GPT-4 models use standard max_tokens."""

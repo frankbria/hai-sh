@@ -126,11 +126,11 @@ class TestOllamaErrorHandling:
 
     def test_connection_error_handling(self, test_config_ollama, tmp_path):
         """Test behavior when Ollama is not reachable."""
-        # Create a config pointing to wrong port
+        # Create a config pointing to wrong port (valid but unlikely to be in use)
         import yaml
 
         config_content = yaml.safe_load(test_config_ollama.read_text())
-        config_content["providers"]["ollama"]["base_url"] = "http://localhost:99999"
+        config_content["providers"]["ollama"]["base_url"] = "http://localhost:59999"
 
         invalid_config = tmp_path / "invalid_config.yaml"
         invalid_config.write_text(yaml.dump(config_content))
@@ -224,7 +224,7 @@ class TestOllamaModelAvailability:
 
     def test_default_model_available(self, test_config_ollama):
         """Test that the default model (llama3.2) works if available."""
-        stdout, stderr, exit_code = run_hai(
+        stdout, _stderr, exit_code = run_hai(
             "list files",
             test_config_ollama,
         )
