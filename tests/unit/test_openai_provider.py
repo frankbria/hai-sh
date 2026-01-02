@@ -250,11 +250,13 @@ def test_generate_without_context(mock_openai_client, minimal_config):
 
         assert response == "echo hello"
 
-        # Verify API was called without system message
+        # Verify API was called with default system message
         call_args = mock_create.call_args
         messages = call_args.kwargs['messages']
-        assert len(messages) == 1
-        assert messages[0]['role'] == 'user'
+        assert len(messages) == 2  # System + user message
+        assert messages[0]['role'] == 'system'
+        assert "helpful terminal assistant" in messages[0]['content']
+        assert messages[1]['role'] == 'user'
 
 
 @pytest.mark.unit
@@ -642,3 +644,127 @@ def test_format_context_complete(mock_openai_client, minimal_config):
     assert "Git branch: main" in formatted
     assert "User: testuser" in formatted
     assert "Shell: /bin/zsh" in formatted
+
+
+# ============================================================================
+# System Prompt Tests (TDD - New Feature)
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_generate_with_system_prompt_parameter(mock_openai_client, minimal_config):
+    """Test generate accepts system_prompt parameter."""
+    provider = OpenAIProvider(minimal_config)
+
+    system_prompt = "You are a bash command generator. Always respond in JSON format."
+
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = '{"command": "ls -la"}'
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        response = provider.generate("List files", system_prompt=system_prompt)
+
+        assert response == '{"command": "ls -la"}'
+
+        # Verify API was called with system_prompt in messages
+        call_args = mock_create.call_args
+        messages = call_args.kwargs['messages']
+
+        # First message should be system role with our prompt
+        assert messages[0]['role'] == 'system'
+        assert "bash command generator" in messages[0]['content']
+        assert "JSON format" in messages[0]['content']
+
+
+@pytest.mark.unit
+def test_generate_system_prompt_overrides_default(mock_openai_client, minimal_config):
+    """Test that system_prompt replaces the default system message."""
+    provider = OpenAIProvider(minimal_config)
+
+    system_prompt = "Custom system instructions."
+
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = "response"
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        provider.generate("test", system_prompt=system_prompt)
+
+        call_args = mock_create.call_args
+        messages = call_args.kwargs['messages']
+
+        # Should use custom system prompt, not default
+        assert messages[0]['role'] == 'system'
+        assert "Custom system instructions" in messages[0]['content']
+        assert "helpful terminal assistant" not in messages[0]['content']
+
+
+@pytest.mark.unit
+def test_generate_system_prompt_with_context(mock_openai_client, minimal_config):
+    """Test system_prompt is combined with context."""
+    provider = OpenAIProvider(minimal_config)
+
+    system_prompt = "You are a JSON command generator."
+    context = {
+        "cwd": "/home/user/project",
+        "git": {"is_repo": True, "branch": "main", "has_changes": False}
+    }
+
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = '{"command": "git status"}'
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        provider.generate("Check git", system_prompt=system_prompt, context=context)
+
+        call_args = mock_create.call_args
+        messages = call_args.kwargs['messages']
+
+        # Should contain both system prompt and context
+        assert messages[0]['role'] == 'system'
+        system_content = messages[0]['content']
+        assert "JSON command generator" in system_content
+        assert "/home/user/project" in system_content
+        assert "main" in system_content
+
+
+@pytest.mark.unit
+def test_generate_without_system_prompt_uses_default(mock_openai_client, minimal_config):
+    """Test that omitting system_prompt uses default behavior (backward compatibility)."""
+    provider = OpenAIProvider(minimal_config)
+
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = "echo hello"
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        # Call without system_prompt parameter
+        response = provider.generate("Say hello")
+
+        assert response == "echo hello"
+
+        # Verify API was called with default system message
+        call_args = mock_create.call_args
+        messages = call_args.kwargs['messages']
+        assert messages[0]['role'] == 'system'
+        assert "helpful terminal assistant" in messages[0]['content']
+
+
+@pytest.mark.unit
+def test_generate_empty_system_prompt(mock_openai_client, minimal_config):
+    """Test generate handles empty system_prompt gracefully."""
+    provider = OpenAIProvider(minimal_config)
+
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = "response"
+
+    with patch.object(provider.client.chat.completions, 'create', return_value=mock_response) as mock_create:
+        # Empty string should fall back to default
+        provider.generate("test", system_prompt="")
+
+        call_args = mock_create.call_args
+        messages = call_args.kwargs['messages']
+        assert messages[0]['role'] == 'system'
+        assert "helpful terminal assistant" in messages[0]['content']

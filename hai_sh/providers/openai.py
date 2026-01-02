@@ -95,13 +95,19 @@ class OpenAIProvider(BaseLLMProvider):
         # All other models use max_tokens
         return False
 
-    def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        context: Optional[dict[str, Any]] = None,
+        system_prompt: Optional[str] = None
+    ) -> str:
         """
         Generate a response using OpenAI's API.
 
         Args:
             prompt: The input prompt/query
             context: Optional context dictionary (e.g., cwd, git state)
+            system_prompt: Optional system prompt with JSON format instructions
 
         Returns:
             str: Generated response from OpenAI
@@ -113,12 +119,32 @@ class OpenAIProvider(BaseLLMProvider):
             # Build messages
             messages = []
 
-            # Add system message with context if provided
-            if context:
+            # Build system message
+            # Priority: system_prompt > context > default
+            if system_prompt and system_prompt.strip():
+                # Use provided system prompt as base
+                system_content = system_prompt
+                # Append context if provided
+                if context:
+                    context_info = self._format_context(context, include_base=False)
+                    if context_info:
+                        system_content = f"{system_prompt}\n\n{context_info}"
+                messages.append({
+                    "role": "system",
+                    "content": system_content
+                })
+            elif context:
+                # Fall back to context-based system message
                 system_content = self._format_context(context)
                 messages.append({
                     "role": "system",
                     "content": system_content
+                })
+            else:
+                # Fall back to default
+                messages.append({
+                    "role": "system",
+                    "content": "You are a helpful terminal assistant."
                 })
 
             # Add user prompt
@@ -219,17 +245,21 @@ class OpenAIProvider(BaseLLMProvider):
         # Check if API key is configured
         return "api_key" in self.config and bool(self.config["api_key"])
 
-    def _format_context(self, context: dict[str, Any]) -> str:
+    def _format_context(self, context: dict[str, Any], include_base: bool = True) -> str:
         """
         Format context dictionary into a system message.
 
         Args:
             context: Context dictionary with cwd, git, env info
+            include_base: Whether to include base "helpful assistant" message
 
         Returns:
             str: Formatted system message
         """
-        parts = ["You are a helpful terminal assistant."]
+        parts = []
+
+        if include_base:
+            parts.append("You are a helpful terminal assistant.")
 
         if "cwd" in context:
             parts.append(f"Current directory: {context['cwd']}")

@@ -310,17 +310,16 @@ def main():
         if debug_mode:
             print(f"Debug: Using {provider_name} provider", file=sys.stderr)
             print(f"Debug: Query: {user_query}", file=sys.stderr)
+            print(f"Debug: System prompt: {system_prompt[:100]}...", file=sys.stderr)
 
         try:
-            # Combine system prompt and user query
-            full_prompt = f"{system_prompt}\n\nUser request: {user_query}"
-
-            # Generate with retry
+            # Generate with retry - pass system prompt separately
             response = generate_with_retry(
                 provider=provider,
-                prompt=full_prompt,
+                prompt=user_query,
                 context=context,
-                max_retries=3
+                max_retries=3,
+                system_prompt=system_prompt
             )
 
         except Exception as e:

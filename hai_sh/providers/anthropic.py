@@ -67,13 +67,19 @@ class AnthropicProvider(BaseLLMProvider):
         self.max_tokens = self.config.get("max_tokens", 1000)
         self.temperature = self.config.get("temperature", 0.7)
 
-    def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        context: Optional[dict[str, Any]] = None,
+        system_prompt: Optional[str] = None
+    ) -> str:
         """
         Generate a response using Anthropic's API.
 
         Args:
             prompt: The input prompt/query
             context: Optional context dictionary (e.g., cwd, git state)
+            system_prompt: Optional system prompt with JSON format instructions
 
         Returns:
             str: Generated response from Anthropic
@@ -82,17 +88,29 @@ class AnthropicProvider(BaseLLMProvider):
             RuntimeError: If API request fails
         """
         try:
-            # Build system message with context if provided
-            system_message = None
-            if context:
+            # Build system message
+            # Priority: system_prompt > context > default
+            if system_prompt and system_prompt.strip():
+                # Use provided system prompt as base
+                system_message = system_prompt
+                # Append context if provided
+                if context:
+                    context_info = self._format_context(context, include_base=False)
+                    if context_info:
+                        system_message = f"{system_prompt}\n\n{context_info}"
+            elif context:
+                # Fall back to context-based system message
                 system_message = self._format_context(context)
+            else:
+                # Fall back to default
+                system_message = "You are a helpful terminal assistant."
 
             # Make API request using Messages API
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
-                system=system_message if system_message else "You are a helpful terminal assistant.",
+                system=system_message,
                 messages=[
                     {
                         "role": "user",
@@ -171,17 +189,21 @@ class AnthropicProvider(BaseLLMProvider):
         # Check if API key is configured
         return "api_key" in self.config and bool(self.config["api_key"])
 
-    def _format_context(self, context: dict[str, Any]) -> str:
+    def _format_context(self, context: dict[str, Any], include_base: bool = True) -> str:
         """
         Format context dictionary into a system message.
 
         Args:
             context: Context dictionary with cwd, git, env info
+            include_base: Whether to include base "helpful assistant" message
 
         Returns:
             str: Formatted system message
         """
-        parts = ["You are a helpful terminal assistant."]
+        parts = []
+
+        if include_base:
+            parts.append("You are a helpful terminal assistant.")
 
         if "cwd" in context:
             parts.append(f"Current directory: {context['cwd']}")

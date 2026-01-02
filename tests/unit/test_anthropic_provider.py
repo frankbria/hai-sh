@@ -472,3 +472,124 @@ def test_format_context_complete(mock_anthropic_client, minimal_config):
     assert "Git branch: main" in formatted
     assert "User: testuser" in formatted
     assert "Shell: /bin/zsh" in formatted
+
+
+# ============================================================================
+# System Prompt Tests (TDD - New Feature)
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_generate_with_system_prompt_parameter(mock_anthropic_client, minimal_config):
+    """Test generate accepts system_prompt parameter."""
+    provider = AnthropicProvider(minimal_config)
+
+    system_prompt = "You are a bash command generator. Always respond in JSON format."
+
+    mock_response = Mock()
+    mock_content_block = Mock()
+    mock_content_block.text = '{"command": "ls -la"}'
+    mock_response.content = [mock_content_block]
+
+    with patch.object(provider.client.messages, 'create', return_value=mock_response) as mock_create:
+        response = provider.generate("List files", system_prompt=system_prompt)
+
+        assert response == '{"command": "ls -la"}'
+
+        # Verify API was called with system_prompt in system message
+        call_args = mock_create.call_args
+        system_msg = call_args.kwargs['system']
+        assert "bash command generator" in system_msg
+        assert "JSON format" in system_msg
+
+
+@pytest.mark.unit
+def test_generate_system_prompt_overrides_default(mock_anthropic_client, minimal_config):
+    """Test that system_prompt replaces the default system message."""
+    provider = AnthropicProvider(minimal_config)
+
+    system_prompt = "Custom system instructions."
+
+    mock_response = Mock()
+    mock_content_block = Mock()
+    mock_content_block.text = "response"
+    mock_response.content = [mock_content_block]
+
+    with patch.object(provider.client.messages, 'create', return_value=mock_response) as mock_create:
+        provider.generate("test", system_prompt=system_prompt)
+
+        call_args = mock_create.call_args
+        system_msg = call_args.kwargs['system']
+
+        # Should use custom system prompt, not default
+        assert "Custom system instructions" in system_msg
+        assert "helpful terminal assistant" not in system_msg
+
+
+@pytest.mark.unit
+def test_generate_system_prompt_with_context(mock_anthropic_client, minimal_config):
+    """Test system_prompt is combined with context."""
+    provider = AnthropicProvider(minimal_config)
+
+    system_prompt = "You are a JSON command generator."
+    context = {
+        "cwd": "/home/user/project",
+        "git": {"is_repo": True, "branch": "main", "has_changes": False}
+    }
+
+    mock_response = Mock()
+    mock_content_block = Mock()
+    mock_content_block.text = '{"command": "git status"}'
+    mock_response.content = [mock_content_block]
+
+    with patch.object(provider.client.messages, 'create', return_value=mock_response) as mock_create:
+        provider.generate("Check git", system_prompt=system_prompt, context=context)
+
+        call_args = mock_create.call_args
+        system_msg = call_args.kwargs['system']
+
+        # Should contain both system prompt and context
+        assert "JSON command generator" in system_msg
+        assert "/home/user/project" in system_msg
+        assert "main" in system_msg
+
+
+@pytest.mark.unit
+def test_generate_without_system_prompt_uses_default(mock_anthropic_client, minimal_config):
+    """Test that omitting system_prompt uses default behavior (backward compatibility)."""
+    provider = AnthropicProvider(minimal_config)
+
+    mock_response = Mock()
+    mock_content_block = Mock()
+    mock_content_block.text = "echo hello"
+    mock_response.content = [mock_content_block]
+
+    with patch.object(provider.client.messages, 'create', return_value=mock_response) as mock_create:
+        # Call without system_prompt parameter
+        response = provider.generate("Say hello")
+
+        assert response == "echo hello"
+
+        # Verify API was called with default system message
+        call_args = mock_create.call_args
+        system_msg = call_args.kwargs['system']
+        assert "helpful terminal assistant" in system_msg
+
+
+@pytest.mark.unit
+def test_generate_empty_system_prompt(mock_anthropic_client, minimal_config):
+    """Test generate handles empty system_prompt gracefully."""
+    provider = AnthropicProvider(minimal_config)
+
+    mock_response = Mock()
+    mock_content_block = Mock()
+    mock_content_block.text = "response"
+    mock_response.content = [mock_content_block]
+
+    with patch.object(provider.client.messages, 'create', return_value=mock_response) as mock_create:
+        # Empty string should fall back to default
+        provider.generate("test", system_prompt="")
+
+        call_args = mock_create.call_args
+        system_msg = call_args.kwargs['system']
+        assert "helpful terminal assistant" in system_msg
