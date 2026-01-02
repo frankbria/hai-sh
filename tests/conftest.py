@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
+import requests
+import yaml
 
 
 @pytest.fixture
@@ -164,3 +166,216 @@ def capture_output():
             return self.stderr.getvalue()
 
     return OutputCapture
+
+
+# Provider-specific test configuration fixtures
+
+
+@pytest.fixture
+def test_config_openai(tmp_path: Path) -> Generator[Path, None, None]:
+    """
+    Create temporary config file for OpenAI provider testing.
+
+    This fixture creates an isolated config that uses the OPENAI_API_KEY
+    environment variable, ensuring tests don't interfere with user's
+    ~/.hai/config.yaml.
+
+    Args:
+        tmp_path: Pytest's tmp_path fixture
+
+    Yields:
+        Path: Path to temporary config file
+
+    Raises:
+        pytest.skip: If OPENAI_API_KEY is not set
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        pytest.skip("OPENAI_API_KEY environment variable not set")
+
+    config_dir = tmp_path / ".hai"
+    config_dir.mkdir()
+    config_file = config_dir / "config.yaml"
+
+    config_content = {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "providers": {
+            "openai": {
+                "api_key": api_key,
+                "model": "gpt-4o-mini",
+            }
+        },
+        "context": {
+            "include_history": True,
+            "history_length": 10,
+            "include_env_vars": True,
+            "include_git_state": True,
+        },
+        "output": {
+            "show_conversation": True,
+            "show_reasoning": True,
+            "use_colors": False,  # Disable colors for cleaner test output
+        },
+    }
+
+    config_file.write_text(yaml.dump(config_content))
+    yield config_file
+
+
+@pytest.fixture
+def test_config_anthropic(tmp_path: Path) -> Generator[Path, None, None]:
+    """
+    Create temporary config file for Anthropic provider testing.
+
+    This fixture creates an isolated config that uses the ANTHROPIC_API_KEY
+    environment variable, ensuring tests don't interfere with user's
+    ~/.hai/config.yaml.
+
+    Args:
+        tmp_path: Pytest's tmp_path fixture
+
+    Yields:
+        Path: Path to temporary config file
+
+    Raises:
+        pytest.skip: If ANTHROPIC_API_KEY is not set
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
+
+    config_dir = tmp_path / ".hai"
+    config_dir.mkdir()
+    config_file = config_dir / "config.yaml"
+
+    config_content = {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "providers": {
+            "anthropic": {
+                "api_key": api_key,
+                "model": "claude-sonnet-4-5",
+            }
+        },
+        "context": {
+            "include_history": True,
+            "history_length": 10,
+            "include_env_vars": True,
+            "include_git_state": True,
+        },
+        "output": {
+            "show_conversation": True,
+            "show_reasoning": True,
+            "use_colors": False,  # Disable colors for cleaner test output
+        },
+    }
+
+    config_file.write_text(yaml.dump(config_content))
+    yield config_file
+
+
+@pytest.fixture
+def test_config_ollama(tmp_path: Path) -> Generator[Path, None, None]:
+    """
+    Create temporary config file for Ollama provider testing.
+
+    This fixture creates an isolated config for Ollama with default
+    localhost configuration, ensuring tests don't interfere with user's
+    ~/.hai/config.yaml.
+
+    Args:
+        tmp_path: Pytest's tmp_path fixture
+
+    Yields:
+        Path: Path to temporary config file
+    """
+    config_dir = tmp_path / ".hai"
+    config_dir.mkdir()
+    config_file = config_dir / "config.yaml"
+
+    config_content = {
+        "provider": "ollama",
+        "model": "llama3.2",
+        "providers": {
+            "ollama": {
+                "base_url": "http://localhost:11434",
+                "model": "llama3.2",
+            }
+        },
+        "context": {
+            "include_history": True,
+            "history_length": 10,
+            "include_env_vars": True,
+            "include_git_state": True,
+        },
+        "output": {
+            "show_conversation": True,
+            "show_reasoning": True,
+            "use_colors": False,  # Disable colors for cleaner test output
+        },
+    }
+
+    config_file.write_text(yaml.dump(config_content))
+    yield config_file
+
+
+# Helper functions for provider availability checking
+
+
+def is_openai_available() -> bool:
+    """
+    Check if OpenAI provider is available for testing.
+
+    Returns:
+        bool: True if OPENAI_API_KEY is set and TEST_OPENAI is enabled
+    """
+    return (
+        os.environ.get("OPENAI_API_KEY") is not None
+        and os.environ.get("TEST_OPENAI", "0") == "1"
+    )
+
+
+def is_anthropic_available() -> bool:
+    """
+    Check if Anthropic provider is available for testing.
+
+    Returns:
+        bool: True if ANTHROPIC_API_KEY is set and TEST_ANTHROPIC is enabled
+    """
+    return (
+        os.environ.get("ANTHROPIC_API_KEY") is not None
+        and os.environ.get("TEST_ANTHROPIC", "0") == "1"
+    )
+
+
+def is_ollama_available() -> bool:
+    """
+    Check if Ollama provider is available for testing.
+
+    Returns:
+        bool: True if Ollama is running on localhost:11434
+    """
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=2)
+        return response.status_code == 200
+    except (requests.RequestException, OSError):
+        return False
+
+
+# Skip decorators for provider-specific tests
+
+skip_if_no_openai = pytest.mark.skipif(
+    not is_openai_available(),
+    reason="OpenAI provider not available (set OPENAI_API_KEY and TEST_OPENAI=1)",
+)
+
+skip_if_no_anthropic = pytest.mark.skipif(
+    not is_anthropic_available(),
+    reason="Anthropic provider not available (set ANTHROPIC_API_KEY and TEST_ANTHROPIC=1)",
+)
+
+skip_if_no_ollama = pytest.mark.skipif(
+    not is_ollama_available(),
+    reason="Ollama not running on localhost:11434",
+)

@@ -85,6 +85,10 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow running tests",
+    "openai: Tests for OpenAI provider",
+    "anthropic: Tests for Anthropic provider",
+    "ollama: Tests for Ollama provider",
+    "requires_api_key: Test requires valid API key",
 ]
 filterwarnings = [
     "error",
