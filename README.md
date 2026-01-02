@@ -390,16 +390,36 @@ pytest
 ### Running Tests
 
 ```bash
-# All tests
+# Run all tests (unit + Ollama integration if available)
 pytest
 
-# With coverage
-pytest --cov=hai_sh
+# Run with coverage
+pytest --cov=hai_sh --cov-report=html
 
-# Specific category
-pytest tests/unit/
-pytest tests/integration/
+# Run only unit tests (fast, no external dependencies)
+pytest -m unit
+
+# Run only integration tests
+pytest -m integration
 ```
+
+#### Provider-Specific Testing
+
+```bash
+# Test OpenAI provider (requires API key)
+TEST_OPENAI=1 OPENAI_API_KEY=sk-... pytest -m "integration and openai"
+
+# Test Anthropic provider (requires API key)
+TEST_ANTHROPIC=1 ANTHROPIC_API_KEY=sk-ant-... pytest -m "integration and anthropic"
+
+# Test Ollama provider (requires Ollama running locally)
+pytest -m "integration and ollama"
+
+# Test all providers simultaneously
+TEST_OPENAI=1 TEST_ANTHROPIC=1 pytest -m integration
+```
+
+**📖 For detailed testing instructions, see [tests/TESTING.md](tests/TESTING.md)**
 
 ### Code Quality
 
@@ -413,10 +433,11 @@ ruff hai_sh/ tests/
 
 ### Current Test Status
 
-- **Total Tests**: 576 (all passing ✅)
-- **Coverage**: 92.18%
-- **Unit Tests**: 560
-- **Integration Tests**: 16
+- **Total Tests**: 600+ (all passing ✅)
+- **Coverage**: 92%+
+- **Unit Tests**: 560+
+- **Integration Tests**: 40+ (provider-specific + cross-provider)
+- **Providers Tested**: OpenAI, Anthropic, Ollama
 
 ## 🎯 Design Philosophy
 

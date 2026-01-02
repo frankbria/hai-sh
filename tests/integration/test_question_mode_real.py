@@ -9,21 +9,16 @@ import subprocess
 import pytest
 import requests
 
-
-def is_ollama_available():
-    """Check if Ollama is running and available."""
-    try:
-        response = requests.get("http://localhost:11434/api/tags", timeout=2)
-        return response.status_code == 200
-    except (requests.RequestException, ConnectionError):
-        return False
+from tests.conftest import skip_if_no_ollama
 
 
 # Skip all tests in this module if Ollama is not available
-pytestmark = pytest.mark.skipif(
-    not is_ollama_available(),
-    reason="Ollama is not running. Start with: ollama serve"
-)
+# Also mark all tests with ollama and integration markers
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.ollama,
+    skip_if_no_ollama,
+]
 
 
 @pytest.fixture
@@ -78,7 +73,6 @@ def run_hai(query: str, config_file: str) -> tuple[str, str, int]:
     return result.stdout, result.stderr, result.returncode
 
 
-@pytest.mark.integration
 def test_question_mode_ls_flags(ollama_config_file):
     """Test question mode with a simple question about ls flags."""
     stdout, stderr, exit_code = run_hai(
@@ -101,7 +95,6 @@ def test_question_mode_ls_flags(ollama_config_file):
     assert "-a" in stdout.lower() or "all" in stdout.lower() or "hidden" in stdout.lower()
 
 
-@pytest.mark.integration
 def test_question_mode_difference_between_commands(ollama_config_file):
     """Test asking about the difference between two commands."""
     stdout, stderr, exit_code = run_hai(
@@ -123,7 +116,6 @@ def test_question_mode_difference_between_commands(ollama_config_file):
     assert "Confidence:" in stdout
 
 
-@pytest.mark.integration
 def test_question_mode_explain_concept(ollama_config_file):
     """Test asking for an explanation of a concept."""
     stdout, stderr, exit_code = run_hai(
@@ -144,7 +136,6 @@ def test_question_mode_explain_concept(ollama_config_file):
     assert "Confidence:" in stdout
 
 
-@pytest.mark.integration
 def test_question_mode_when_to_use(ollama_config_file):
     """Test asking when to use a particular tool."""
     stdout, stderr, exit_code = run_hai(
@@ -165,7 +156,6 @@ def test_question_mode_when_to_use(ollama_config_file):
     assert "Confidence:" in stdout
 
 
-@pytest.mark.integration
 def test_command_mode_still_works(ollama_config_file):
     """Verify command mode still works (regression test)."""
     stdout, stderr, exit_code = run_hai(
@@ -195,7 +185,6 @@ def test_command_mode_still_works(ollama_config_file):
     assert exit_code in [0, 1], f"Unexpected exit code: {exit_code}"
 
 
-@pytest.mark.integration
 def test_question_mode_vs_command_mode_detection(ollama_config_file):
     """Test that the system correctly distinguishes questions from commands."""
     # Question query

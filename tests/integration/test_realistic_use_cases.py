@@ -3,6 +3,10 @@ Integration tests for realistic use cases from PRD.
 
 Tests the complete workflow from natural language input to command
 generation using mocked LLM responses for consistency and repeatability.
+
+NOTE: These tests use MockLLMProvider for speed and determinism.
+For real provider testing, see test_integration_openai.py,
+test_integration_anthropic.py, and test_integration_ollama.py.
 """
 
 import json
