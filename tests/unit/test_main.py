@@ -311,10 +311,18 @@ def test_main_with_query():
     mock_result.stdout = 'file1.bin\nfile2.bin'
     mock_result.stderr = ''
 
+    # Mock provider fallback result
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = False
+
     with patch('sys.argv', test_args):
         with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
             with patch('hai_sh.__main__.load_config', return_value=mock_config):
-                with patch('hai_sh.__main__.get_provider') as mock_get_provider:
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
                     with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
                         with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
                             with patch('hai_sh.__main__.execute_command', return_value=mock_result):
@@ -540,10 +548,18 @@ def test_integration_complete_workflow():
     mock_result.stdout = 'file1.txt\nfile2.txt'
     mock_result.stderr = ''
 
+    # Mock provider fallback result
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = False
+
     with patch('sys.argv', test_args):
         with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
             with patch('hai_sh.__main__.load_config', return_value=mock_config):
-                with patch('hai_sh.__main__.get_provider') as mock_get_provider:
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
                     with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
                         with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
                             with patch('hai_sh.__main__.execute_command', return_value=mock_result):
