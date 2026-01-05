@@ -3,10 +3,12 @@ CLI entry point for hai.
 """
 
 import argparse
+import logging
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any, Dict
 
 from hai_sh import __version__, init_hai_directory
 from hai_sh.config import (
@@ -18,6 +20,9 @@ from hai_sh.context import get_cwd_context, get_git_context, get_env_context
 from hai_sh.prompt import build_system_prompt, generate_with_retry
 from hai_sh.executor import execute_command
 from hai_sh.output import should_use_color
+
+# Module logger for debug output
+_logger = logging.getLogger(__name__)
 
 
 # Help text and examples
@@ -231,14 +236,14 @@ def handle_execution_error(error: str):
     )
 
 
-def gather_context_parallel() -> dict:
+def gather_context_parallel() -> Dict[str, Any]:
     """
     Gather context information in parallel for faster startup.
 
     Returns:
-        dict: Context dictionary with cwd, git, and env information
+        Dict[str, Any]: Context dictionary with cwd, git, and env information
     """
-    context = {}
+    context: Dict[str, Any] = {}
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
@@ -251,8 +256,14 @@ def gather_context_parallel() -> dict:
             key = futures[future]
             try:
                 context[key] = future.result()
-            except Exception:
-                # Gracefully handle failures - use empty context
+            except Exception as e:
+                # Log failure at debug level, then gracefully degrade to empty context
+                _logger.debug(
+                    "Context gathering failed for '%s': %s",
+                    key,
+                    e,
+                    exc_info=True
+                )
                 context[key] = {}
 
     return context
@@ -284,7 +295,7 @@ def format_collapsed_explanation(explanation: str, use_colors: bool = True) -> s
     return f"{DIM}{CYAN}[Explanation: {short_explanation}]{RESET}"
 
 
-def should_auto_execute(confidence: int, config: dict) -> bool:
+def should_auto_execute(confidence: int, config: Dict[str, Any]) -> bool:
     """
     Determine if a command should be auto-executed based on confidence and config.
 
