@@ -66,9 +66,6 @@ def create_default_config() -> str:
 # Default LLM provider to use
 provider: "ollama"
 
-# Default model for the provider
-model: "llama3.2"
-
 # Provider-specific configurations
 providers:
   openai:

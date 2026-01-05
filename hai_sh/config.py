@@ -28,7 +28,6 @@ except ImportError:
 DEFAULT_CONFIG = {
     "provider": "ollama",
     "provider_priority": None,  # Optional: list of providers to try in order
-    "model": "llama3.2",
     "providers": {
         "openai": {
             "model": "gpt-4o-mini",
@@ -329,6 +328,21 @@ def load_config(
             user_config = {}
         else:
             raise
+
+    # Check for deprecated top-level model field
+    if "model" in user_config:
+        import warnings
+
+        provider = user_config.get("provider", "ollama")
+        warnings.warn(
+            f"The top-level 'model' field in config.yaml is deprecated and unused. "
+            f"Model selection is controlled by providers.{provider}.model instead. "
+            f"Please remove the top-level 'model' field from your config.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        # Remove it to prevent Pydantic validation errors
+        del user_config["model"]
 
     # Merge with defaults
     if use_defaults:

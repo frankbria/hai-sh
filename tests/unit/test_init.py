@@ -292,7 +292,6 @@ def test_default_config_yaml_structure():
 
     # Test top-level keys
     assert "provider" in config
-    assert "model" in config
     assert "providers" in config
     assert "context" in config
     assert "output" in config
