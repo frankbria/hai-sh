@@ -190,7 +190,6 @@ On first run, hai creates `~/.hai/config.yaml`:
 ```yaml
 # Default: Use free local Ollama
 provider: "ollama"
-model: "llama3.2"
 
 providers:
   # OpenAI (requires API key)

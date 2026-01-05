@@ -257,7 +257,6 @@ def test_hai_config_defaults():
     config = HaiConfig()
 
     assert config.provider == "ollama"
-    assert config.model == "llama3.2"
     assert config.providers is not None
     assert config.context is not None
     assert config.output is not None
@@ -268,14 +267,12 @@ def test_hai_config_custom():
     """Test HaiConfig with custom values."""
     config = HaiConfig(
         provider="openai",
-        model="gpt-4o",
         providers=ProvidersConfig(
             openai=OpenAIProviderConfig(api_key="sk-test"),
         ),
     )
 
     assert config.provider == "openai"
-    assert config.model == "gpt-4o"
     assert config.providers.openai.api_key == "sk-test"
 
 
@@ -337,14 +334,12 @@ def test_validate_config_dict_valid():
     """Test validate_config_dict with valid config."""
     config_dict = {
         "provider": "ollama",
-        "model": "llama3.2",
     }
 
     validated_config, warnings = validate_config_dict(config_dict)
 
     assert isinstance(validated_config, HaiConfig)
     assert validated_config.provider == "ollama"
-    assert validated_config.model == "llama3.2"
     assert len(warnings) == 0
 
 

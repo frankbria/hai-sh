@@ -80,7 +80,6 @@ hai uses YAML format for configuration. The file must be valid YAML and follow t
 ```yaml
 # Core settings
 provider: "ollama"           # Which provider to use
-model: "llama3.2"           # Default model name
 
 # Provider configurations
 providers:
@@ -131,21 +130,6 @@ provider: "anthropic"   # Use Anthropic Claude models
 provider: "ollama"      # Use local Ollama models (recommended)
 provider: "local"       # Use local model file
 ```
-
----
-
-### `model` (optional)
-
-Default model name for the selected provider. This is overridden by provider-specific model settings.
-
-**Type**: `string`
-**Default**: `"llama3.2"` (for Ollama)
-
-```yaml
-model: "llama3.2"
-```
-
-**Note**: This setting is optional and mainly used as a fallback. Each provider has its own `model` setting that takes precedence.
 
 ---
 

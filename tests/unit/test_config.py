@@ -138,7 +138,6 @@ def test_load_config_file_valid(tmp_path, monkeypatch):
 
     config_data = {
         "provider": "openai",
-        "model": "gpt-4",
     }
 
     with open(config_file, "w") as f:
@@ -149,7 +148,6 @@ def test_load_config_file_valid(tmp_path, monkeypatch):
     config = load_config_file(config_file)
 
     assert config["provider"] == "openai"
-    assert config["model"] == "gpt-4"
 
 
 @pytest.mark.unit
@@ -416,10 +414,10 @@ def test_get_provider_config_no_providers():
 @pytest.mark.unit
 def test_get_config_value_simple():
     """Test getting simple config value."""
-    config = {"provider": "ollama", "model": "llama3.2"}
+    config = {"provider": "ollama", "provider_priority": None}
 
     assert get_config_value(config, "provider") == "ollama"
-    assert get_config_value(config, "model") == "llama3.2"
+    assert get_config_value(config, "provider_priority") is None
 
 
 @pytest.mark.unit

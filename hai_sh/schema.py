@@ -174,10 +174,6 @@ class HaiConfig(BaseModel):
                     "If set, overrides the 'provider' field. Providers are tried "
                     "in order until one is available.",
     )
-    model: str = Field(
-        default="llama3.2",
-        description="Default model name",
-    )
     providers: ProvidersConfig = Field(
         default_factory=ProvidersConfig,
         description="Provider-specific configurations",
