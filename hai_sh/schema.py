@@ -4,7 +4,7 @@ Pydantic schema models for hai-sh configuration validation.
 This module defines the structure and validation rules for configuration files.
 """
 
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -168,6 +168,12 @@ class HaiConfig(BaseModel):
         default="ollama",
         description="Default LLM provider to use",
     )
+    provider_priority: Optional[List[Literal["openai", "anthropic", "ollama", "local"]]] = Field(
+        default=None,
+        description="Ordered list of providers to try for fallback support. "
+                    "If set, overrides the 'provider' field. Providers are tried "
+                    "in order until one is available.",
+    )
     model: str = Field(
         default="llama3.2",
         description="Default model name",
@@ -193,14 +199,50 @@ class HaiConfig(BaseModel):
         # so we can't check it here. Will be validated in post-validation.
         return v
 
+    @field_validator("provider_priority")
+    @classmethod
+    def validate_provider_priority(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate provider_priority list."""
+        if v is None:
+            return v
+        if len(v) == 0:
+            raise ValueError("provider_priority list cannot be empty")
+        # Check for duplicates
+        if len(v) != len(set(v)):
+            raise ValueError("provider_priority list cannot contain duplicates")
+        return v
+
     def model_post_init(self, __context) -> None:
         """Post-initialization validation."""
-        # Check that selected provider has configuration
-        provider_config = getattr(self.providers, self.provider, None)
-        if provider_config is None:
-            raise ValueError(
-                f"Provider '{self.provider}' is selected but has no configuration"
-            )
+        # If provider_priority is set, validate those providers have configs
+        if self.provider_priority:
+            for provider_name in self.provider_priority:
+                provider_config = getattr(self.providers, provider_name, None)
+                if provider_config is None:
+                    raise ValueError(
+                        f"Provider '{provider_name}' in provider_priority has no configuration"
+                    )
+        else:
+            # Fall back to single provider validation
+            provider_config = getattr(self.providers, self.provider, None)
+            if provider_config is None:
+                raise ValueError(
+                    f"Provider '{self.provider}' is selected but has no configuration"
+                )
+
+    def get_provider_list(self) -> List[str]:
+        """
+        Get the ordered list of providers to try.
+
+        Returns provider_priority if set, otherwise a single-item list
+        containing the default provider.
+
+        Returns:
+            List[str]: Ordered list of provider names to try
+        """
+        if self.provider_priority:
+            return list(self.provider_priority)
+        return [self.provider]
 
     class Config:
         """Pydantic configuration."""
@@ -236,26 +278,36 @@ def validate_config_dict(config_dict: dict) -> tuple[HaiConfig, list[str]]:
         # Validate with Pydantic
         validated_config = HaiConfig(**config_dict)
 
-        # Check for missing API keys
-        if validated_config.provider == "openai":
-            if not validated_config.providers.openai.api_key:
-                warnings.append(
-                    "OpenAI provider selected but 'api_key' not set. "
-                    "Set OPENAI_API_KEY environment variable or add to config."
-                )
+        # Warn if both provider and provider_priority are set
+        if validated_config.provider_priority and "provider" in config_dict:
+            warnings.append(
+                "Both 'provider' and 'provider_priority' are configured. "
+                "'provider_priority' takes precedence."
+            )
 
-        if validated_config.provider == "anthropic":
-            if not validated_config.providers.anthropic.api_key:
-                warnings.append(
-                    "Anthropic provider selected but 'api_key' not set. "
-                    "Set ANTHROPIC_API_KEY environment variable or add to config."
-                )
+        # Get the list of providers to check for API keys
+        providers_to_check = validated_config.get_provider_list()
 
-        if validated_config.provider == "local":
-            if not validated_config.providers.local:
-                warnings.append(
-                    "Local provider selected but no local provider configuration found."
-                )
+        for provider_name in providers_to_check:
+            if provider_name == "openai":
+                if not validated_config.providers.openai.api_key:
+                    warnings.append(
+                        "OpenAI provider in chain but 'api_key' not set. "
+                        "Set OPENAI_API_KEY environment variable or add to config."
+                    )
+
+            if provider_name == "anthropic":
+                if not validated_config.providers.anthropic.api_key:
+                    warnings.append(
+                        "Anthropic provider in chain but 'api_key' not set. "
+                        "Set ANTHROPIC_API_KEY environment variable or add to config."
+                    )
+
+            if provider_name == "local":
+                if not validated_config.providers.local:
+                    warnings.append(
+                        "Local provider in chain but no local provider configuration found."
+                    )
 
         return validated_config, warnings
 

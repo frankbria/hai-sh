@@ -14,11 +14,15 @@ from hai_sh.config import (
     ConfigLoadError,
     expand_env_vars,
     expand_env_vars_recursive,
+    get_available_provider,
     get_config_value,
     get_provider_config,
+    get_provider_priority_list,
+    check_provider_availability,
     load_config,
     load_config_file,
     merge_configs,
+    ProviderFallbackResult,
     validate_config,
 )
 
@@ -489,3 +493,221 @@ provider: unknown_provider
     config = load_config(use_pydantic=False)
     assert "_warnings" in config
     assert len(config["_warnings"]) > 0
+
+
+# --- Provider Priority List Tests ---
+
+
+@pytest.mark.unit
+def test_get_provider_priority_list_with_priority():
+    """Test get_provider_priority_list with provider_priority set."""
+    config = {
+        "provider_priority": ["ollama", "openai", "anthropic"],
+        "provider": "local",
+    }
+    result = get_provider_priority_list(config)
+    assert result == ["ollama", "openai", "anthropic"]
+
+
+@pytest.mark.unit
+def test_get_provider_priority_list_without_priority():
+    """Test get_provider_priority_list falls back to provider field."""
+    config = {
+        "provider": "anthropic",
+    }
+    result = get_provider_priority_list(config)
+    assert result == ["anthropic"]
+
+
+@pytest.mark.unit
+def test_get_provider_priority_list_default():
+    """Test get_provider_priority_list defaults to ollama."""
+    config = {}
+    result = get_provider_priority_list(config)
+    assert result == ["ollama"]
+
+
+@pytest.mark.unit
+def test_default_config_includes_provider_priority():
+    """Test that DEFAULT_CONFIG includes provider_priority field."""
+    assert "provider_priority" in DEFAULT_CONFIG
+    assert DEFAULT_CONFIG["provider_priority"] is None
+
+
+# --- Check Provider Availability Tests ---
+
+
+@pytest.mark.unit
+def test_check_provider_availability_missing_provider():
+    """Test check_provider_availability with unregistered provider."""
+    success, provider, error = check_provider_availability("nonexistent", {})
+    assert success is False
+    assert provider is None
+    assert "not registered" in error.lower() or "not found" in error.lower()
+
+
+@pytest.mark.unit
+def test_check_provider_availability_invalid_config():
+    """Test check_provider_availability with invalid config."""
+    # OpenAI requires API key starting with sk-
+    success, provider, error = check_provider_availability(
+        "openai",
+        {"api_key": "invalid-key"}
+    )
+    assert success is False
+    assert provider is None
+    assert error is not None
+
+
+@pytest.mark.unit
+def test_check_provider_availability_ollama_not_running():
+    """Test check_provider_availability with unavailable Ollama."""
+    # Use a port that shouldn't have Ollama running
+    success, provider, error = check_provider_availability(
+        "ollama",
+        {"base_url": "http://localhost:99999", "model": "test"}
+    )
+    assert success is False
+    assert provider is None
+    # Error should mention unavailability
+    assert error is not None
+
+
+# --- Provider Fallback Result Tests ---
+
+
+@pytest.mark.unit
+def test_provider_fallback_result_no_fallback():
+    """Test ProviderFallbackResult when no fallback occurred."""
+    result = ProviderFallbackResult(
+        provider="mock_provider",
+        provider_name="ollama",
+        failed_providers=[]
+    )
+    assert result.had_fallback is False
+    assert result.provider_name == "ollama"
+
+
+@pytest.mark.unit
+def test_provider_fallback_result_with_fallback():
+    """Test ProviderFallbackResult when fallback occurred."""
+    result = ProviderFallbackResult(
+        provider="mock_provider",
+        provider_name="openai",
+        failed_providers=[
+            ("ollama", "Cannot connect to Ollama"),
+        ]
+    )
+    assert result.had_fallback is True
+    assert result.provider_name == "openai"
+    assert len(result.failed_providers) == 1
+
+
+@pytest.mark.unit
+def test_provider_fallback_result_multiple_failures():
+    """Test ProviderFallbackResult with multiple failures."""
+    result = ProviderFallbackResult(
+        provider="mock_provider",
+        provider_name="anthropic",
+        failed_providers=[
+            ("ollama", "Cannot connect to Ollama"),
+            ("openai", "Invalid API key"),
+        ]
+    )
+    assert result.had_fallback is True
+    assert result.provider_name == "anthropic"
+    assert len(result.failed_providers) == 2
+
+
+# --- Get Available Provider Tests ---
+
+
+@pytest.mark.unit
+def test_get_available_provider_all_fail():
+    """Test get_available_provider raises when all providers fail."""
+    config = {
+        "provider_priority": ["ollama"],
+        "providers": {
+            "ollama": {
+                "base_url": "http://localhost:99999",  # Invalid port
+                "model": "test",
+            }
+        }
+    }
+    with pytest.raises(ConfigError, match="No providers available"):
+        get_available_provider(config)
+
+
+@pytest.mark.unit
+def test_get_available_provider_single_provider_fails():
+    """Test get_available_provider with single unavailable provider."""
+    config = {
+        "provider": "ollama",
+        "providers": {
+            "ollama": {
+                "base_url": "http://localhost:99999",  # Invalid port
+                "model": "test",
+            }
+        }
+    }
+    with pytest.raises(ConfigError, match="No providers available"):
+        get_available_provider(config)
+
+
+@pytest.mark.unit
+def test_get_available_provider_callback_called():
+    """Test get_available_provider calls on_fallback callback."""
+    fallback_calls = []
+
+    def on_fallback(failed, error, next_provider):
+        fallback_calls.append((failed, next_provider))
+
+    config = {
+        "provider_priority": ["ollama", "openai"],
+        "providers": {
+            "ollama": {
+                "base_url": "http://localhost:99999",
+                "model": "test",
+            },
+            "openai": {
+                "api_key": "invalid",  # Will fail validation
+            }
+        }
+    }
+
+    # Both should fail, but callback should be called when first fails
+    try:
+        get_available_provider(config, on_fallback=on_fallback)
+    except ConfigError:
+        pass
+
+    # Callback should have been called when ollama failed
+    assert len(fallback_calls) >= 1
+    assert fallback_calls[0][0] == "ollama"
+    assert fallback_calls[0][1] == "openai"
+
+
+@pytest.mark.unit
+def test_get_available_provider_error_message_details():
+    """Test get_available_provider includes details in error message."""
+    config = {
+        "provider_priority": ["ollama", "openai"],
+        "providers": {
+            "ollama": {
+                "base_url": "http://localhost:99999",
+                "model": "test",
+            },
+            "openai": {
+                "api_key": "invalid",
+            }
+        }
+    }
+
+    with pytest.raises(ConfigError) as exc_info:
+        get_available_provider(config)
+
+    error_message = str(exc_info.value)
+    # Should list both providers that were tried
+    assert "ollama" in error_message.lower()
+    assert "openai" in error_message.lower()
+    assert "Tried 2 provider" in error_message
