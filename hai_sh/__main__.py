@@ -5,6 +5,7 @@ CLI entry point for hai.
 import argparse
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from hai_sh import __version__, init_hai_directory
@@ -154,6 +155,18 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="auto-execute commands without confirmation (overrides config)"
+    )
+
+    parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="always require confirmation before executing (overrides config)"
+    )
+
+    parser.add_argument(
         "query",
         nargs="*",
         help="natural language command description"
@@ -218,6 +231,86 @@ def handle_execution_error(error: str):
     )
 
 
+def gather_context_parallel() -> dict:
+    """
+    Gather context information in parallel for faster startup.
+
+    Returns:
+        dict: Context dictionary with cwd, git, and env information
+    """
+    context = {}
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(get_cwd_context): 'cwd',
+            executor.submit(get_git_context): 'git',
+            executor.submit(get_env_context): 'env',
+        }
+
+        for future in as_completed(futures):
+            key = futures[future]
+            try:
+                context[key] = future.result()
+            except Exception:
+                # Gracefully handle failures - use empty context
+                context[key] = {}
+
+    return context
+
+
+def format_collapsed_explanation(explanation: str, use_colors: bool = True) -> str:
+    """
+    Format explanation as a collapsible/collapsed section.
+
+    Args:
+        explanation: The explanation text
+        use_colors: Whether to use ANSI colors
+
+    Returns:
+        str: Formatted collapsed explanation
+    """
+    if use_colors:
+        DIM = "\033[2m"
+        RESET = "\033[0m"
+        CYAN = "\033[36m"
+    else:
+        DIM = RESET = CYAN = ""
+
+    # Truncate long explanations for collapsed view
+    short_explanation = explanation[:100] + "..." if len(explanation) > 100 else explanation
+    # Remove newlines for compact display
+    short_explanation = short_explanation.replace("\n", " ")
+
+    return f"{DIM}{CYAN}[Explanation: {short_explanation}]{RESET}"
+
+
+def should_auto_execute(confidence: int, config: dict) -> bool:
+    """
+    Determine if a command should be auto-executed based on confidence and config.
+
+    Args:
+        confidence: Confidence score (0-100)
+        config: Configuration dictionary
+
+    Returns:
+        bool: True if command should be auto-executed
+    """
+    # Get execution settings with defaults
+    execution = config.get('execution', {})
+
+    # If require_confirmation is True, never auto-execute
+    if execution.get('require_confirmation', False):
+        return False
+
+    # If auto_execute is disabled, don't auto-execute
+    if not execution.get('auto_execute', True):
+        return False
+
+    # Check confidence threshold
+    threshold = execution.get('auto_execute_threshold', 85)
+    return confidence >= threshold
+
+
 def get_user_confirmation(command: str) -> bool:
     """
     Ask user to confirm command execution.
@@ -279,12 +372,8 @@ def main():
             handle_config_error(str(e))
             return 1
 
-        # Gather context
-        context = {
-            'cwd': get_cwd_context(),
-            'git': get_git_context(),
-            'env': get_env_context()
-        }
+        # Gather context in parallel for faster startup
+        context = gather_context_parallel()
 
         # Build system prompt with context
         system_prompt = build_system_prompt(context)
@@ -392,33 +481,68 @@ def main():
             print(f"\n{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
             return 0
 
-        # Command Mode: Display explanation, show command, ask for confirmation, execute
-        print(f"\n{explanation}")
+        # Command Mode: Execute-first display with optional auto-execute
+        # Get execution settings
+        show_explanation_mode = config.get('execution', {}).get('show_explanation', 'collapsed')
 
-        # Show command and confidence
-        print(f"\n{BOLD}Command:{RESET} {GREEN}{command}{RESET}")
-        print(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
-
-        # Ask for user confirmation
-        if not get_user_confirmation(command):
-            print("\nCommand execution cancelled")
-            return 0
-
-        # Execute command
-        print("\nExecuting...\n")
-        result = execute_command(command)
-
-        # Display result
-        if result.success:
-            if result.stdout:
-                print(result.stdout)
+        # Determine if we should auto-execute
+        # CLI flags override config: --yes forces auto-execute, --confirm forces confirmation
+        if args.yes:
+            auto_exec = True
+        elif args.confirm:
+            auto_exec = False
         else:
-            print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
-            if result.stderr:
-                print(f"{RED}Error: {result.stderr}{RESET}")
+            auto_exec = should_auto_execute(confidence, config)
 
-        # Return appropriate exit code
-        return 0 if result.success else result.exit_code
+        if auto_exec:
+            # Auto-execute: Show command, execute immediately, then show collapsed explanation
+            print(f"\n{BOLD}${RESET} {GREEN}{command}{RESET}")
+            result = execute_command(command)
+
+            # Display result
+            if result.success:
+                if result.stdout:
+                    print(result.stdout)
+            else:
+                print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
+                if result.stderr:
+                    print(f"{RED}Error: {result.stderr}{RESET}")
+
+            # Show explanation based on config
+            if show_explanation_mode == 'expanded':
+                print(f"\n{BOLD}Explanation:{RESET} {explanation}")
+                print(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
+            elif show_explanation_mode == 'collapsed':
+                collapsed = format_collapsed_explanation(explanation, use_colors)
+                print(f"\n{collapsed} {conf_color}({confidence}%){RESET}")
+            # 'hidden' mode: don't show explanation at all
+
+            return 0 if result.success else result.exit_code
+
+        else:
+            # Manual confirmation required: Show explanation first, then ask
+            print(f"\n{explanation}")
+            print(f"\n{BOLD}Command:{RESET} {GREEN}{command}{RESET}")
+            print(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
+
+            if not get_user_confirmation(command):
+                print("\nCommand execution cancelled")
+                return 0
+
+            # Execute command
+            print("\nExecuting...\n")
+            result = execute_command(command)
+
+            # Display result
+            if result.success:
+                if result.stdout:
+                    print(result.stdout)
+            else:
+                print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
+                if result.stderr:
+                    print(f"{RED}Error: {result.stderr}{RESET}")
+
+            return 0 if result.success else result.exit_code
 
     except KeyboardInterrupt:
         print("\n\nInterrupted by user", file=sys.stderr)

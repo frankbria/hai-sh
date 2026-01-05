@@ -161,6 +161,38 @@ class OutputConfig(BaseModel):
     )
 
 
+class ExecutionConfig(BaseModel):
+    """Command execution configuration."""
+
+    auto_execute: bool = Field(
+        default=True,
+        description="Automatically execute commands above confidence threshold",
+    )
+    auto_execute_threshold: int = Field(
+        default=85,
+        description="Minimum confidence (0-100) for auto-execution",
+        ge=0,
+        le=100,
+    )
+    show_explanation: Literal["collapsed", "expanded", "hidden"] = Field(
+        default="collapsed",
+        description="How to display LLM explanation: collapsed (default), expanded, or hidden",
+    )
+    require_confirmation: bool = Field(
+        default=False,
+        description="Always require confirmation regardless of confidence (overrides auto_execute)",
+    )
+
+    @field_validator("auto_execute_threshold")
+    @classmethod
+    def validate_threshold(cls, v: int) -> int:
+        """Validate threshold is reasonable."""
+        if v < 50:
+            # Warn about very low threshold but allow it
+            pass
+        return v
+
+
 class HaiConfig(BaseModel):
     """Main hai-sh configuration schema."""
 
@@ -185,6 +217,10 @@ class HaiConfig(BaseModel):
     output: OutputConfig = Field(
         default_factory=OutputConfig,
         description="Output formatting settings",
+    )
+    execution: ExecutionConfig = Field(
+        default_factory=ExecutionConfig,
+        description="Command execution settings",
     )
 
     @field_validator("provider")
