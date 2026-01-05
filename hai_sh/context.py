@@ -15,6 +15,15 @@ import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
+# Cache for git availability check (avoids repeated subprocess calls)
+_git_available: Optional[bool] = None
+
+
+def _reset_git_cache() -> None:
+    """Reset the git availability cache (for testing)."""
+    global _git_available
+    _git_available = None
+
 
 def get_cwd_context() -> dict[str, Any]:
     """
@@ -234,6 +243,45 @@ def format_cwd_context(context: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _is_git_available() -> tuple[bool, Optional[str]]:
+    """
+    Check if git is available (cached for definitive results only).
+
+    Returns:
+        tuple: (is_available, error_message)
+            - is_available: True if git is installed and accessible
+            - error_message: None if available, error description otherwise
+    """
+    global _git_available
+
+    # Use cached result if available (only caches definitive answers)
+    if _git_available is not None:
+        if _git_available:
+            return True, None
+        else:
+            return False, "Git is not installed or not in PATH"
+
+    try:
+        result = subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        _git_available = result.returncode == 0
+        if _git_available:
+            return True, None
+        else:
+            return False, "Git is not installed or not in PATH"
+    except FileNotFoundError:
+        # Permanent error - cache it
+        _git_available = False
+        return False, "Git is not installed"
+    except subprocess.TimeoutExpired:
+        # Transient error - don't cache
+        return False, "Git command timed out"
+
+
 def get_git_context(directory: Optional[str] = None) -> dict[str, Any]:
     """
     Collect git repository information for a directory.
@@ -274,22 +322,10 @@ def get_git_context(directory: Optional[str] = None) -> dict[str, Any]:
         if directory is None:
             directory = os.getcwd()
 
-        # Check if git is installed
-        try:
-            result = subprocess.run(
-                ["git", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode != 0:
-                context["error"] = "Git is not installed or not in PATH"
-                return context
-        except FileNotFoundError:
-            context["error"] = "Git is not installed"
-            return context
-        except subprocess.TimeoutExpired:
-            context["error"] = "Git command timed out"
+        # Check if git is installed (cached check)
+        is_available, error_msg = _is_git_available()
+        if not is_available:
+            context["error"] = error_msg
             return context
 
         # Check if directory is in a git repository

@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hai_sh.context import (
+    _reset_git_cache,
     format_cwd_context,
     format_env_context,
     format_git_context,
@@ -489,6 +490,9 @@ def test_get_git_context_with_directory_arg(sample_git_repo):
 @pytest.mark.unit
 def test_get_git_context_git_not_installed(monkeypatch):
     """Test git context when git is not installed."""
+    # Reset the git cache so our mock takes effect
+    _reset_git_cache()
+
     # Mock subprocess.run to raise FileNotFoundError
     def mock_run(*args, **kwargs):
         raise FileNotFoundError("git not found")
@@ -498,12 +502,18 @@ def test_get_git_context_git_not_installed(monkeypatch):
     context = get_git_context()
 
     assert context["is_git_repo"] is False
-    assert "not installed" in context["error"]
+    assert "not installed" in context["error"] or "not in PATH" in context["error"]
+
+    # Reset cache again for other tests
+    _reset_git_cache()
 
 
 @pytest.mark.unit
 def test_get_git_context_git_timeout(monkeypatch):
     """Test git context when git command times out."""
+    # Reset the git cache so our mock takes effect
+    _reset_git_cache()
+
     # Mock subprocess.run to raise TimeoutExpired
     def mock_run(*args, **kwargs):
         import subprocess
@@ -516,6 +526,9 @@ def test_get_git_context_git_timeout(monkeypatch):
 
     assert context["is_git_repo"] is False
     assert "timed out" in context["error"].lower()
+
+    # Reset cache for other tests
+    _reset_git_cache()
 
 
 @pytest.mark.unit

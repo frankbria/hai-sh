@@ -29,20 +29,17 @@ find large files in home directory
 # Press Ctrl+X Ctrl+H
 ```
 
-**Example output:**
+**Example output (auto-execute with high confidence):**
 ```
-━━━ Conversation ━━━
-I'll search for files modified in the last 24 hours using find.
-
-Confidence: 90% [█████████·]
-
-═══════════════════
-━━━ Execution ━━━
 $ find . -type f -mtime -1
 ./README.md
 ./src/app.py
 ./tests/test_app.py
+
+[Explanation: I'll search for files modified in the last 24 hours using find.] (90%)
 ```
+
+Commands with high confidence (≥85%) execute immediately. The explanation is shown collapsed after execution.
 
 ## ✨ Features
 
@@ -52,6 +49,7 @@ $ find . -type f -mtime -1
 - **💬 Dual Mode Operation**:
   - **Command Mode**: Generate and execute bash commands
   - **Question Mode**: Get answers to your terminal/bash questions without executing anything
+- **⚡ Smart Auto-Execute**: High-confidence commands (≥85%) run immediately without confirmation
 - **🔄 Dual-Layer Output**: See both the AI's reasoning and the actual command
 - **🌍 Context-Aware**: Automatically includes current directory, git state, and environment
 - **🔒 Privacy-First**: Supports local Ollama models—no API costs, data stays private
@@ -115,7 +113,7 @@ hai follows an agile development approach with frequent version increments.
 
 - **v0.1** ✅ - Proof of Concept: Basic invocation, LLM providers, dual-layer output
 - **v0.2** 🚧 - Enhanced Context: History, session context, hybrid memory model
-- **v0.3** 📋 - Smart Execution: Confidence scoring, auto-execute vs. confirm
+- **v0.3** ✅ - Smart Execution: Confidence scoring, auto-execute vs. confirm
 - **v0.4** 📋 - Permissions Framework: Granular control over command execution
 - **v0.5** 📋 - Error Handling: Automatic retry with model upgrade for debugging
 - **v1.0** 📋 - Production Ready: Polished, tested, documented, secure
@@ -215,6 +213,12 @@ context:
 output:
   show_conversation: true
   use_colors: true
+
+execution:
+  auto_execute: true           # Auto-run high-confidence commands
+  auto_execute_threshold: 85   # Minimum confidence for auto-execute (0-100)
+  show_explanation: collapsed  # collapsed, expanded, or hidden
+  require_confirmation: false  # Always require confirmation if true
 ```
 
 ### Setting Up Ollama (Recommended)
@@ -250,6 +254,46 @@ export OPENAI_API_KEY="sk-..."
 provider: "openai"
 ```
 
+### Execution Behavior
+
+Control how hai executes commands:
+
+```yaml
+execution:
+  # Enable/disable auto-execution (default: true)
+  auto_execute: true
+
+  # Minimum confidence to auto-execute (default: 85)
+  auto_execute_threshold: 85
+
+  # How to show explanation: collapsed, expanded, hidden (default: collapsed)
+  show_explanation: collapsed
+
+  # Always require confirmation, overrides auto_execute (default: false)
+  require_confirmation: false
+```
+
+**Example configurations:**
+
+```yaml
+# Conservative: Always ask before executing
+execution:
+  require_confirmation: true
+```
+
+```yaml
+# Fast: Lower threshold, hide explanations
+execution:
+  auto_execute_threshold: 70
+  show_explanation: hidden
+```
+
+```yaml
+# Learning: Always show full explanations
+execution:
+  show_explanation: expanded
+```
+
 **📖 Full configuration guide:** [CONFIGURATION.md](./CONFIGURATION.md)
 
 ## 📖 Usage
@@ -276,6 +320,26 @@ show me uncommitted git changes
 
 # 2. Press Ctrl+X Ctrl+H
 # 3. hai processes and suggests command
+```
+
+### CLI Flags
+
+```bash
+# Force auto-execute (skip confirmation)
+hai -y "list all files"
+hai --yes "show disk usage"
+
+# Force confirmation (even for high-confidence)
+hai --confirm "delete temp files"
+
+# Just show suggestion without executing
+hai --suggest-only "find large files"
+
+# Disable colors
+hai --no-color "show status"
+
+# Debug mode
+hai --debug "complex query"
 ```
 
 ### Example Queries
@@ -319,28 +383,38 @@ hai "Why would I use git merge instead of git rebase?"
 
 **📖 20+ examples and tutorials:** [USAGE.md](./USAGE.md)
 
-## 🎯 Understanding Dual-Layer Output
+## 🎯 Understanding Execution Modes
 
-hai operates in two modes automatically:
+hai operates in two modes automatically based on confidence:
 
-### Command Mode (Action Requests)
+### Auto-Execute Mode (High Confidence ≥85%)
 
-When you request an action, hai shows both **what the AI is thinking** and **what command it generates**:
+When hai is confident, commands run immediately:
 
+```bash
+$ hai "how many files in this directory"
 ```
-━━━ Conversation ━━━
+```
+$ ls | wc -l
+42
+
+[Explanation: I'll count the files in the current directory using ls and wc.] (92%)
+```
+
+The command executes first, then the explanation appears collapsed below.
+
+### Confirmation Mode (Lower Confidence <85%)
+
+When confidence is lower, or with `--confirm` flag, hai asks before executing:
+
+```bash
+$ hai --confirm "find large files"
+```
+```
 I'll search for large files in your home directory and sort them by size.
-The find command will look for files over 100MB, and du will show sizes in
-human-readable format.
 
-Confidence: 90% [█████████·]
-
-═══════════════════
-━━━ Execution ━━━
-$ find ~ -type f -size +100M -exec du -h {} + | sort -rh | head -20
-1.2G    /home/user/videos/movie.mp4
-856M    /home/user/downloads/ubuntu.iso
-234M    /home/user/.cache/spotify/Data/1234.cache
+Command: find ~ -type f -size +100M -exec du -h {} + | sort -rh | head -20
+Confidence: 78%
 
 Execute this command? [y/N/e(dit)]:
 ```
@@ -366,10 +440,10 @@ Confidence: 98% [█████████·]
 ```
 
 **Benefits:**
-- **Learning**: Understand what commands do and why
-- **Transparency**: See the AI's reasoning process
-- **Confidence**: Visual indicator shows reliability (0-100%)
-- **Trust**: Verify before executing (command mode)
+- **Speed**: High-confidence commands run immediately without interruption
+- **Safety**: Lower-confidence commands require confirmation
+- **Learning**: Collapsed explanations available when you need them
+- **Control**: Use `-y` to always auto-execute, `--confirm` to always ask
 - **Knowledge**: Get answers without execution (question mode)
 
 ## 🤝 Contributing
