@@ -493,6 +493,78 @@ provider: unknown_provider
     assert len(config["_warnings"]) > 0
 
 
+@pytest.mark.unit
+def test_load_config_deprecated_model_field_warning(tmp_path, monkeypatch):
+    """Test that deprecated top-level model field triggers a warning."""
+    import warnings
+
+    config_dir = tmp_path / ".hai"
+    config_dir.mkdir()
+    config_file = config_dir / "config.yaml"
+
+    # Config with deprecated top-level model field
+    config_content = """
+provider: ollama
+model: llama3.2
+"""
+    config_file.write_text(config_content)
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Capture deprecation warnings
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        config = load_config()
+
+        # Verify a DeprecationWarning was raised
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+
+        # Verify warning message contains expected guidance
+        warning_message = str(w[0].message)
+        assert "top-level 'model' field" in warning_message
+        assert "deprecated" in warning_message
+        assert "providers.ollama.model" in warning_message
+
+    # Verify the model field was removed from the config (no attribute error)
+    assert not hasattr(config, "model") or "model" not in dir(config)
+    # Verify config still works correctly
+    assert config.provider == "ollama"
+
+
+@pytest.mark.unit
+def test_load_config_deprecated_model_field_removed(tmp_path, monkeypatch):
+    """Test that deprecated top-level model field is removed from config."""
+    import warnings
+
+    config_dir = tmp_path / ".hai"
+    config_dir.mkdir()
+    config_file = config_dir / "config.yaml"
+
+    # Config with deprecated top-level model field and custom provider
+    config_content = """
+provider: openai
+model: gpt-4
+providers:
+  openai:
+    api_key: sk-test
+    model: gpt-4o-mini
+"""
+    config_file.write_text(config_content)
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Suppress the warning and just check the config
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        config = load_config()
+
+    # Verify config loaded successfully without the deprecated field
+    assert config.provider == "openai"
+    # Provider-specific model should still work
+    assert config.providers.openai.model == "gpt-4o-mini"
+
+
 # --- Provider Priority List Tests ---
 
 
