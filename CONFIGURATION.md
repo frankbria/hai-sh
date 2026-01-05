@@ -7,6 +7,9 @@ Complete guide for configuring hai-sh to work with your preferred LLM provider a
 - [Configuration File Location](#configuration-file-location)
 - [Configuration File Format](#configuration-file-format)
 - [Core Configuration](#core-configuration)
+  - [provider](#provider-required)
+  - [provider_priority](#provider_priority-optional)
+  - [model](#model-optional)
 - [Provider Configuration](#provider-configuration)
   - [OpenAI Setup](#openai-setup)
   - [Anthropic Setup](#anthropic-setup)
@@ -15,6 +18,7 @@ Complete guide for configuring hai-sh to work with your preferred LLM provider a
 - [Context Settings](#context-settings)
 - [Output Settings](#output-settings)
 - [Example Configurations](#example-configurations)
+  - [Provider Fallback Chain Configuration](#provider-fallback-chain-configuration)
 - [Security Best Practices](#security-best-practices)
 - [Configuration Validation](#configuration-validation)
 - [Troubleshooting](#troubleshooting)
@@ -142,6 +146,64 @@ model: "llama3.2"
 ```
 
 **Note**: This setting is optional and mainly used as a fallback. Each provider has its own `model` setting that takes precedence.
+
+---
+
+### `provider_priority` (optional)
+
+Ordered list of providers to try for automatic fallback support. When set, overrides the `provider` field. Providers are tried in order until one is available.
+
+**Type**: `list[string]` or `null`
+**Valid values**: `["openai", "anthropic", "ollama", "local"]`
+**Default**: `null` (uses single `provider` field)
+
+```yaml
+# Try Ollama first, fall back to OpenAI, then Anthropic
+provider_priority:
+  - "ollama"
+  - "openai"
+  - "anthropic"
+```
+
+**How fallback works**:
+1. hai tries each provider in order
+2. If a provider is unavailable (server down, API key missing, etc.), hai automatically tries the next one
+3. A warning message shows which providers failed and why
+4. Once a provider succeeds, hai uses it for the request
+
+**Example output when fallback occurs**:
+```
+Provider 'ollama' unavailable (Cannot connect to Ollama...), trying 'openai'...
+Using provider 'openai'
+```
+
+**Use cases**:
+- **Local-first workflow**: Try free local Ollama, fall back to cloud if unavailable
+- **Cost optimization**: Try cheaper providers first
+- **Reliability**: Ensure hai works even if one provider is down
+- **Rate limit handling**: Automatically switch if one provider is rate-limited
+
+**Examples**:
+
+```yaml
+# Local-first: Free when possible
+provider_priority:
+  - "ollama"      # Try local first (free)
+  - "openai"      # Fall back to cloud
+
+# Cost-optimized chain
+provider_priority:
+  - "ollama"      # Free local
+  - "openai"      # Cheaper cloud option
+  - "anthropic"   # More expensive backup
+
+# Cloud-only with redundancy
+provider_priority:
+  - "anthropic"   # Primary cloud provider
+  - "openai"      # Backup cloud provider
+```
+
+**Backward compatibility**: If `provider_priority` is not set, hai uses the single `provider` field as before. Existing configurations continue to work without modification.
 
 ---
 
@@ -901,6 +963,64 @@ hai "list files"
 # Use Anthropic
 # Edit config: provider: "anthropic"
 ```
+
+---
+
+### Provider Fallback Chain Configuration
+
+**Best for**: Automatic failover when primary provider is unavailable.
+
+```yaml
+# Use provider_priority for automatic fallback
+provider_priority:
+  - "ollama"      # Try local first (free, fast)
+  - "openai"      # Fall back to OpenAI
+  - "anthropic"   # Last resort
+
+providers:
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama3.2"
+
+  openai:
+    # api_key: set via OPENAI_API_KEY env var
+    model: "gpt-4o-mini"
+
+  anthropic:
+    # api_key: set via ANTHROPIC_API_KEY env var
+    model: "claude-sonnet-4-5"
+
+context:
+  include_history: true
+  history_length: 10
+  include_env_vars: true
+  include_git_state: true
+
+output:
+  show_conversation: true
+  show_reasoning: true
+  use_colors: true
+```
+
+**How it works**:
+1. hai tries Ollama first (local, free)
+2. If Ollama is not running, hai automatically tries OpenAI
+3. If OpenAI fails (no API key, rate limit), hai tries Anthropic
+4. User sees a message indicating which provider is being used
+
+**Example output**:
+```
+Provider 'ollama' unavailable (Cannot connect to Ollama at http://localhost:11434...), trying 'openai'...
+Using provider 'openai'
+
+I'll list the files in the current directory...
+```
+
+**Benefits**:
+- ✅ Works offline when Ollama is available
+- ✅ Automatic fallback to cloud when local is down
+- ✅ No manual switching needed
+- ✅ Optimizes for cost (local first)
 
 ---
 

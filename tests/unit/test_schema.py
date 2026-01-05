@@ -481,3 +481,125 @@ def test_validate_config_dict_all_providers():
     assert validated_config.context.history_length == 20
     assert validated_config.output.use_colors is False
     assert len(warnings) == 0
+
+
+# --- Provider Priority Tests ---
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_defaults():
+    """Test HaiConfig provider_priority defaults to None."""
+    config = HaiConfig()
+    assert config.provider_priority is None
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_valid():
+    """Test HaiConfig with valid provider_priority."""
+    config = HaiConfig(
+        provider_priority=["ollama", "openai", "anthropic"],
+    )
+    assert config.provider_priority == ["ollama", "openai", "anthropic"]
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_single():
+    """Test HaiConfig with single-item provider_priority."""
+    config = HaiConfig(
+        provider_priority=["ollama"],
+    )
+    assert config.provider_priority == ["ollama"]
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_empty_raises():
+    """Test HaiConfig rejects empty provider_priority."""
+    with pytest.raises(ValidationError, match="cannot be empty"):
+        HaiConfig(provider_priority=[])
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_duplicates_raises():
+    """Test HaiConfig rejects duplicate providers in priority list."""
+    with pytest.raises(ValidationError, match="cannot contain duplicates"):
+        HaiConfig(provider_priority=["ollama", "openai", "ollama"])
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_invalid_provider_raises():
+    """Test HaiConfig rejects invalid provider in priority list."""
+    with pytest.raises(ValidationError, match="Input should be"):
+        HaiConfig(provider_priority=["ollama", "invalid"])
+
+
+@pytest.mark.unit
+def test_hai_config_provider_priority_missing_config_raises():
+    """Test HaiConfig validates providers in priority have config."""
+    with pytest.raises(ValueError, match="in provider_priority has no configuration"):
+        HaiConfig(
+            provider_priority=["local", "ollama"],
+            providers=ProvidersConfig(local=None),  # Local has no config
+        )
+
+
+@pytest.mark.unit
+def test_hai_config_get_provider_list_with_priority():
+    """Test get_provider_list returns provider_priority when set."""
+    config = HaiConfig(
+        provider_priority=["openai", "anthropic", "ollama"],
+    )
+    assert config.get_provider_list() == ["openai", "anthropic", "ollama"]
+
+
+@pytest.mark.unit
+def test_hai_config_get_provider_list_without_priority():
+    """Test get_provider_list returns single provider when priority not set."""
+    config = HaiConfig(provider="anthropic")
+    assert config.get_provider_list() == ["anthropic"]
+
+
+@pytest.mark.unit
+def test_validate_config_dict_provider_priority_warns_both_set():
+    """Test validate_config_dict warns when both provider and provider_priority set."""
+    config_dict = {
+        "provider": "anthropic",
+        "provider_priority": ["ollama", "openai"],
+    }
+
+    validated_config, warnings = validate_config_dict(config_dict)
+
+    # Should have a warning about both being set
+    assert len(warnings) >= 1
+    assert any("provider_priority" in w and "precedence" in w for w in warnings)
+
+
+@pytest.mark.unit
+def test_validate_config_dict_provider_priority_missing_api_key():
+    """Test validate_config_dict warns about missing API keys in priority list."""
+    config_dict = {
+        "provider_priority": ["openai", "anthropic"],
+        "providers": {
+            "openai": {"model": "gpt-4o"},
+            "anthropic": {"model": "claude-sonnet-4-5"},
+        },
+    }
+
+    validated_config, warnings = validate_config_dict(config_dict)
+
+    # Should have warnings about missing API keys for both providers
+    assert len(warnings) >= 2
+    assert any("openai" in w.lower() and "api_key" in w.lower() for w in warnings)
+    assert any("anthropic" in w.lower() and "api_key" in w.lower() for w in warnings)
+
+
+@pytest.mark.unit
+def test_validate_config_dict_provider_priority_no_api_key_warning_for_ollama():
+    """Test validate_config_dict doesn't warn about API key for Ollama."""
+    config_dict = {
+        "provider_priority": ["ollama"],
+    }
+
+    validated_config, warnings = validate_config_dict(config_dict)
+
+    # Ollama doesn't need API key
+    assert len(warnings) == 0

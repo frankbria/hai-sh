@@ -311,10 +311,18 @@ def test_main_with_query():
     mock_result.stdout = 'file1.bin\nfile2.bin'
     mock_result.stderr = ''
 
+    # Mock provider fallback result
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = False
+
     with patch('sys.argv', test_args):
         with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
             with patch('hai_sh.__main__.load_config', return_value=mock_config):
-                with patch('hai_sh.__main__.get_provider') as mock_get_provider:
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
                     with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
                         with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
                             with patch('hai_sh.__main__.execute_command', return_value=mock_result):
@@ -540,10 +548,18 @@ def test_integration_complete_workflow():
     mock_result.stdout = 'file1.txt\nfile2.txt'
     mock_result.stderr = ''
 
+    # Mock provider fallback result
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = False
+
     with patch('sys.argv', test_args):
         with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
             with patch('hai_sh.__main__.load_config', return_value=mock_config):
-                with patch('hai_sh.__main__.get_provider') as mock_get_provider:
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
                     with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
                         with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
                             with patch('hai_sh.__main__.execute_command', return_value=mock_result):
@@ -553,3 +569,246 @@ def test_integration_complete_workflow():
     output = mock_stdout.getvalue()
     assert exit_code == 0
     assert "list all files" in output or "ls" in output
+
+
+# ============================================================================
+# Provider Fallback Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_main_with_fallback_shows_success_message():
+    """Test that main shows success message when fallback occurred."""
+    test_args = ['hai', 'list', 'files']
+
+    # Mock config
+    mock_config = {
+        'provider': 'openai',
+        'provider_priority': ['openai', 'ollama'],
+        'providers': {
+            'openai': {'api_key': 'test-key', 'model': 'gpt-4o-mini'},
+            'ollama': {'base_url': 'http://localhost:11434', 'model': 'llama3.2'}
+        }
+    }
+
+    # Mock LLM response
+    mock_response = {
+        'conversation': 'I will list files.',
+        'command': 'ls -la',
+        'confidence': 95
+    }
+
+    # Mock execution result
+    mock_result = Mock()
+    mock_result.success = True
+    mock_result.exit_code = 0
+    mock_result.stdout = 'file1.txt'
+    mock_result.stderr = ''
+
+    # Mock provider fallback result with had_fallback=True
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = True
+    mock_fallback_result.failed_providers = [('openai', 'API key invalid')]
+
+    with patch('sys.argv', test_args):
+        with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
+                    with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
+                        with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
+                            with patch('hai_sh.__main__.execute_command', return_value=mock_result):
+                                with patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
+                                    with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+                                        exit_code = main()
+
+    stderr_output = mock_stderr.getvalue()
+    assert exit_code == 0
+    # Should show success message indicating which provider is being used
+    assert "Using provider 'ollama'" in stderr_output
+
+
+@pytest.mark.unit
+def test_main_fallback_callback_truncates_long_errors():
+    """Test that fallback callback truncates error messages over 50 chars."""
+    test_args = ['hai', 'list', 'files']
+
+    # Mock config
+    mock_config = {
+        'provider': 'openai',
+        'provider_priority': ['openai', 'anthropic', 'ollama'],
+        'providers': {
+            'openai': {'api_key': 'test-key', 'model': 'gpt-4o-mini'},
+            'anthropic': {'api_key': 'test-key', 'model': 'claude-sonnet-4-5'},
+            'ollama': {'base_url': 'http://localhost:11434', 'model': 'llama3.2'}
+        }
+    }
+
+    # Mock LLM response
+    mock_response = {
+        'conversation': 'I will list files.',
+        'command': 'ls -la',
+        'confidence': 95
+    }
+
+    # Mock execution result
+    mock_result = Mock()
+    mock_result.success = True
+    mock_result.exit_code = 0
+    mock_result.stdout = 'file1.txt'
+    mock_result.stderr = ''
+
+    # Mock provider
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = True
+
+    # Track callback invocations
+    callback_calls = []
+
+    def mock_get_available_provider(config, debug_mode=False, on_fallback=None):
+        # Simulate fallback callback with a long error message
+        if on_fallback:
+            long_error = "This is a very long error message that exceeds fifty characters and should be truncated"
+            on_fallback('openai', long_error, 'anthropic')
+        return mock_fallback_result
+
+    with patch('sys.argv', test_args):
+        with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_available_provider', side_effect=mock_get_available_provider):
+                    with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
+                        with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
+                            with patch('hai_sh.__main__.execute_command', return_value=mock_result):
+                                with patch('sys.stdout', new_callable=io.StringIO):
+                                    with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+                                        exit_code = main()
+
+    stderr_output = mock_stderr.getvalue()
+    assert exit_code == 0
+    # Should contain truncated error with "..."
+    assert "..." in stderr_output
+    assert "Provider 'openai' unavailable" in stderr_output
+    assert "trying 'anthropic'" in stderr_output
+
+
+@pytest.mark.unit
+def test_main_fallback_callback_short_error_not_truncated():
+    """Test that fallback callback does not truncate short error messages."""
+    test_args = ['hai', 'list', 'files']
+
+    # Mock config
+    mock_config = {
+        'provider': 'openai',
+        'provider_priority': ['openai', 'ollama'],
+        'providers': {
+            'openai': {'api_key': 'test-key', 'model': 'gpt-4o-mini'},
+            'ollama': {'base_url': 'http://localhost:11434', 'model': 'llama3.2'}
+        }
+    }
+
+    # Mock LLM response
+    mock_response = {
+        'conversation': 'I will list files.',
+        'command': 'ls -la',
+        'confidence': 95
+    }
+
+    # Mock execution result
+    mock_result = Mock()
+    mock_result.success = True
+    mock_result.exit_code = 0
+    mock_result.stdout = 'file1.txt'
+    mock_result.stderr = ''
+
+    # Mock provider
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = True
+
+    def mock_get_available_provider(config, debug_mode=False, on_fallback=None):
+        # Simulate fallback callback with a short error message
+        if on_fallback:
+            short_error = "API key invalid"
+            on_fallback('openai', short_error, 'ollama')
+        return mock_fallback_result
+
+    with patch('sys.argv', test_args):
+        with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_available_provider', side_effect=mock_get_available_provider):
+                    with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
+                        with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
+                            with patch('hai_sh.__main__.execute_command', return_value=mock_result):
+                                with patch('sys.stdout', new_callable=io.StringIO):
+                                    with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+                                        exit_code = main()
+
+    stderr_output = mock_stderr.getvalue()
+    assert exit_code == 0
+    # Should contain full error message without truncation
+    assert "API key invalid" in stderr_output
+    # The error should appear directly without "..." truncation
+    assert "API key invalid)" in stderr_output or "API key invalid," in stderr_output
+
+
+@pytest.mark.unit
+def test_main_no_fallback_no_success_message():
+    """Test that main does not show success message when no fallback occurred."""
+    test_args = ['hai', 'list', 'files']
+
+    # Mock config
+    mock_config = {
+        'provider': 'ollama',
+        'providers': {
+            'ollama': {'base_url': 'http://localhost:11434', 'model': 'llama3.2'}
+        }
+    }
+
+    # Mock LLM response
+    mock_response = {
+        'conversation': 'I will list files.',
+        'command': 'ls -la',
+        'confidence': 95
+    }
+
+    # Mock execution result
+    mock_result = Mock()
+    mock_result.success = True
+    mock_result.exit_code = 0
+    mock_result.stdout = 'file1.txt'
+    mock_result.stderr = ''
+
+    # Mock provider fallback result with had_fallback=False
+    mock_provider = Mock()
+    mock_provider.is_available.return_value = True
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = mock_provider
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = False
+    mock_fallback_result.failed_providers = []
+
+    with patch('sys.argv', test_args):
+        with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
+                    with patch('hai_sh.__main__.generate_with_retry', return_value=mock_response):
+                        with patch('hai_sh.__main__.get_user_confirmation', return_value=True):
+                            with patch('hai_sh.__main__.execute_command', return_value=mock_result):
+                                with patch('sys.stdout', new_callable=io.StringIO):
+                                    with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+                                        exit_code = main()
+
+    stderr_output = mock_stderr.getvalue()
+    assert exit_code == 0
+    # Should NOT show the "Using provider" success message
+    assert "Using provider" not in stderr_output

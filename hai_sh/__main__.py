@@ -6,15 +6,16 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 from hai_sh import __version__, init_hai_directory
-from hai_sh.config import load_config, ConfigError as ConfigLoadError
+from hai_sh.config import (
+    load_config,
+    ConfigError as ConfigLoadError,
+    get_available_provider,
+)
 from hai_sh.context import get_cwd_context, get_git_context, get_env_context
-from hai_sh.providers import get_provider
-from hai_sh.prompt import build_system_prompt, generate_with_retry, parse_response
-from hai_sh.executor import execute_command, ExecutionResult
-from hai_sh.formatter import format_dual_layer
+from hai_sh.prompt import build_system_prompt, generate_with_retry
+from hai_sh.executor import execute_command
 from hai_sh.output import should_use_color
 
 
@@ -288,22 +289,45 @@ def main():
         # Build system prompt with context
         system_prompt = build_system_prompt(context)
 
-        # Get LLM provider
-        provider_name = config.get('provider', 'ollama')
-        provider_config = config.get('providers', {}).get(provider_name, {})
+        # Determine color settings for status messages
+        use_colors = should_use_color() and not args.no_color
+        if use_colors:
+            WARN = "\033[93m"  # Yellow
+            SUCCESS = "\033[92m"  # Green
+            RESET = "\033[0m"
+        else:
+            WARN = SUCCESS = RESET = ""
 
-        try:
-            provider = get_provider(provider_name, provider_config)
-        except Exception as e:
-            handle_provider_error(f"Failed to initialize {provider_name} provider: {e}")
-            return 1
-
-        # Check if provider is available
-        if not provider.is_available():
-            handle_provider_error(
-                f"{provider_name} provider is not available. "
-                f"Check your configuration and API keys."
+        # Define fallback callback for user feedback
+        def handle_fallback(failed_provider: str, error: str, next_provider: str):
+            """Print fallback message when switching providers."""
+            # Truncate error message if too long
+            short_error = error[:50] + "..." if len(error) > 50 else error
+            print(
+                f"{WARN}Provider '{failed_provider}' unavailable ({short_error}), "
+                f"trying '{next_provider}'...{RESET}",
+                file=sys.stderr
             )
+
+        # Get LLM provider using fallback chain
+        try:
+            result = get_available_provider(
+                config,
+                debug_mode=debug_mode,
+                on_fallback=handle_fallback
+            )
+            provider = result.provider
+            provider_name = result.provider_name
+
+            # Report successful provider selection if fallback occurred
+            if result.had_fallback:
+                print(
+                    f"{SUCCESS}Using provider '{provider_name}'{RESET}",
+                    file=sys.stderr
+                )
+
+        except ConfigLoadError as e:
+            handle_provider_error(str(e))
             return 1
 
         # Generate command using LLM

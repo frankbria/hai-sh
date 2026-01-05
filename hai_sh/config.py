@@ -27,6 +27,7 @@ except ImportError:
 # Default configuration values
 DEFAULT_CONFIG = {
     "provider": "ollama",
+    "provider_priority": None,  # Optional: list of providers to try in order
     "model": "llama3.2",
     "providers": {
         "openai": {
@@ -423,3 +424,208 @@ def get_config_value(config: dict, key_path: str, default: Any = None) -> Any:
             return default
 
     return value
+
+
+def get_provider_priority_list(config: dict) -> list[str]:
+    """
+    Get the ordered list of providers to try.
+
+    Uses provider_priority if set, otherwise creates a single-item list
+    from the provider field.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        list[str]: Ordered list of provider names to try
+
+    Example:
+        >>> config = {"provider_priority": ["ollama", "openai"]}
+        >>> get_provider_priority_list(config)
+        ['ollama', 'openai']
+        >>> config = {"provider": "anthropic"}
+        >>> get_provider_priority_list(config)
+        ['anthropic']
+    """
+    provider_priority = config.get("provider_priority")
+    if provider_priority:
+        return list(provider_priority)
+    return [config.get("provider", "ollama")]
+
+
+def check_provider_availability(
+    provider_name: str,
+    provider_config: dict
+) -> tuple[bool, Optional[Any], Optional[str]]:
+    """
+    Check if a provider is available and return details.
+
+    Attempts to instantiate the provider and check its availability.
+
+    Args:
+        provider_name: Name of the provider (e.g., "ollama", "openai")
+        provider_config: Provider-specific configuration dictionary
+
+    Returns:
+        tuple: (success, provider_instance, error_message)
+            - success: True if provider is available
+            - provider_instance: The instantiated provider if successful, None otherwise
+            - error_message: Description of failure if unsuccessful, None otherwise
+
+    Example:
+        >>> success, provider, error = check_provider_availability(
+        ...     "ollama",
+        ...     {"base_url": "http://localhost:11434", "model": "llama3.2"}
+        ... )
+        >>> if success:
+        ...     response = provider.generate("hello")
+    """
+    # Import here to avoid circular imports
+    from hai_sh.providers import get_provider
+
+    try:
+        # Attempt to instantiate the provider
+        provider = get_provider(provider_name, provider_config)
+
+        # Check availability using detailed method if available
+        if hasattr(provider, 'check_availability'):
+            available, error = provider.check_availability()
+            if available:
+                return True, provider, None
+            else:
+                return False, None, error or f"{provider_name} is not available"
+        else:
+            # Fall back to is_available()
+            if provider.is_available():
+                return True, provider, None
+            else:
+                return False, None, f"{provider_name} is not available"
+
+    except KeyError as e:
+        return False, None, f"Provider '{provider_name}' not registered: {e}"
+    except ValueError as e:
+        return False, None, f"Invalid configuration for {provider_name}: {e}"
+    except RuntimeError as e:
+        return False, None, f"{provider_name} runtime error: {e}"
+    except ConnectionError as e:
+        return False, None, f"Cannot connect to {provider_name}: {e}"
+    except TimeoutError as e:
+        return False, None, f"Timeout connecting to {provider_name}: {e}"
+    except Exception as e:
+        return False, None, f"{provider_name} error: {e}"
+
+
+class ProviderFallbackResult:
+    """
+    Result of provider fallback selection.
+
+    Contains the selected provider and information about failed attempts.
+    """
+
+    def __init__(
+        self,
+        provider: Any,
+        provider_name: str,
+        failed_providers: list[tuple[str, str]]
+    ):
+        """
+        Initialize fallback result.
+
+        Args:
+            provider: The successfully selected provider instance
+            provider_name: Name of the selected provider
+            failed_providers: List of (provider_name, error_message) for failed attempts
+        """
+        self.provider = provider
+        self.provider_name = provider_name
+        self.failed_providers = failed_providers
+
+    @property
+    def had_fallback(self) -> bool:
+        """Whether fallback to a non-primary provider occurred."""
+        return len(self.failed_providers) > 0
+
+
+def get_available_provider(
+    config: dict,
+    debug_mode: bool = False,
+    on_fallback: Optional[callable] = None
+) -> ProviderFallbackResult:
+    """
+    Get the first available provider from the priority chain.
+
+    Iterates through the provider priority list, attempting to initialize
+    and validate each provider until one succeeds. Provides detailed
+    feedback about fallback attempts.
+
+    Args:
+        config: Full configuration dictionary
+        debug_mode: If True, print debug information about provider attempts
+        on_fallback: Optional callback function called when fallback occurs.
+                     Receives (failed_provider_name, error_message, next_provider_name)
+
+    Returns:
+        ProviderFallbackResult: Contains the selected provider and fallback info
+
+    Raises:
+        ConfigError: If no providers are available after trying all in the chain
+
+    Example:
+        >>> config = load_config()
+        >>> result = get_available_provider(config)
+        >>> if result.had_fallback:
+        ...     print(f"Using {result.provider_name} after fallback")
+        >>> response = result.provider.generate("hello")
+
+    Example with callback:
+        >>> def handle_fallback(failed, error, next_provider):
+        ...     print(f"Provider {failed} failed: {error}")
+        >>> result = get_available_provider(config, on_fallback=handle_fallback)
+    """
+    import sys
+
+    provider_list = get_provider_priority_list(config)
+    providers_config = config.get("providers", {})
+    failed_providers = []
+
+    for i, provider_name in enumerate(provider_list):
+        provider_config = providers_config.get(provider_name, {})
+
+        if debug_mode:
+            print(f"Debug: Trying provider '{provider_name}'...", file=sys.stderr)
+
+        success, provider, error = check_provider_availability(
+            provider_name, provider_config
+        )
+
+        if success:
+            if debug_mode:
+                print(f"Debug: Using provider '{provider_name}'", file=sys.stderr)
+
+            return ProviderFallbackResult(
+                provider=provider,
+                provider_name=provider_name,
+                failed_providers=failed_providers
+            )
+        else:
+            failed_providers.append((provider_name, error))
+
+            # Call fallback callback if provided
+            if on_fallback and i < len(provider_list) - 1:
+                next_provider = provider_list[i + 1]
+                on_fallback(provider_name, error, next_provider)
+
+            if debug_mode:
+                print(
+                    f"Debug: Provider '{provider_name}' unavailable: {error}",
+                    file=sys.stderr
+                )
+
+    # All providers failed
+    error_details = "\n".join(
+        f"  - {name}: {error}" for name, error in failed_providers
+    )
+    raise ConfigError(
+        f"No providers available. Tried {len(provider_list)} provider(s):\n{error_details}\n"
+        f"Check your configuration and ensure at least one provider is properly configured."
+    )
