@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hai-sh"
-version = "0.1.0"
+version = "0.1.2"
 description = "AI-powered terminal assistant that suggests or executes bash commands from natural language."
 readme = "README.md"
 requires-python = ">=3.9"

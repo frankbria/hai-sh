@@ -168,7 +168,7 @@ def main():
     parser.add_argument(
         '--version',
         action='version',
-        version='hai-sh 0.1.0'
+        version='hai-sh 0.1.2'
     )
     
     args = parser.parse_args()
