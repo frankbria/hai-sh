@@ -95,6 +95,30 @@ _hai_format_confidence() {
     fi
 }
 
+# Helper function to escape command to prevent alias expansion
+# Commands are escaped with a backslash prefix to prevent alias expansion.
+# This is a standard bash idiom that preserves all other shell features
+# (variables, globbing, pipes, redirects, etc.) while preventing aliases from
+# interfering with the AI-generated command. The escape is only applied to the
+# buffer; the display shows the unescaped command to the user.
+# See: https://github.com/frankbria/hai-sh/issues/63
+_hai_escape_command() {
+    local command="$1"
+
+    # Extract the base command (first word)
+    local base_cmd="${command%% *}"
+
+    # Handle edge cases: empty command or already escaped
+    if [[ -z "$base_cmd" ]] || [[ "$base_cmd" == \\* ]]; then
+        print -r "$command"
+        return 0
+    fi
+
+    # Prefix base command with backslash to prevent alias expansion
+    local escaped_cmd="\\${base_cmd}${command#$base_cmd}"
+    print -r "$escaped_cmd"
+}
+
 # Helper function to display dual-layer output
 _hai_display_dual_layer() {
     local conversation="$1"
@@ -230,10 +254,14 @@ _hai_trigger_widget() {
         return 0
     fi
 
-    # Put the command on the buffer for user to review and execute
+    # Escape the command to prevent alias expansion
+    local escaped_command
+    escaped_command=$(_hai_escape_command "$command")
+
+    # Put the escaped command on the buffer for user to review and execute
     # User can press Enter to execute, or edit/cancel manually
-    BUFFER="$command"
-    CURSOR="${#command}"
+    BUFFER="$escaped_command"
+    CURSOR="${#escaped_command}"
 
     print "→ Command ready on prompt. Press Enter to execute, or edit/cancel as needed."
     print ""
