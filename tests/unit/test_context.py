@@ -11,13 +11,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hai_sh.context import (
+    _format_file_size,
+    _filter_files_by_relevance,
     _reset_git_cache,
     format_cwd_context,
     format_env_context,
+    format_file_listing_context,
     format_git_context,
     get_cwd_context,
     get_directory_info,
     get_env_context,
+    get_file_listing_context,
     get_git_context,
     get_safe_env_vars,
     is_sensitive_env_var,
@@ -934,3 +938,452 @@ def test_get_env_context_integration():
     # Test formatting
     formatted = format_env_context(context)
     assert isinstance(formatted, str)
+
+
+# ==================== File Listing Context Tests ====================
+
+
+@pytest.mark.unit
+def test_format_file_size_bytes():
+    """Test file size formatting for bytes."""
+    assert _format_file_size(0) == "0 B"
+    assert _format_file_size(512) == "512 B"
+    assert _format_file_size(1023) == "1023 B"
+
+
+@pytest.mark.unit
+def test_format_file_size_kilobytes():
+    """Test file size formatting for kilobytes."""
+    assert _format_file_size(1024) == "1.0 KB"
+    assert _format_file_size(1536) == "1.5 KB"
+    assert _format_file_size(2048) == "2.0 KB"
+
+
+@pytest.mark.unit
+def test_format_file_size_megabytes():
+    """Test file size formatting for megabytes."""
+    assert _format_file_size(1048576) == "1.0 MB"
+    assert _format_file_size(1572864) == "1.5 MB"
+    assert _format_file_size(10485760) == "10.0 MB"
+
+
+@pytest.mark.unit
+def test_format_file_size_gigabytes():
+    """Test file size formatting for gigabytes."""
+    assert _format_file_size(1073741824) == "1.0 GB"
+    assert _format_file_size(2147483648) == "2.0 GB"
+
+
+@pytest.mark.unit
+def test_filter_files_by_relevance_no_query():
+    """Test file filtering without query returns first max_files."""
+    files = [
+        {'name': 'file1.txt', 'type': 'file'},
+        {'name': 'file2.txt', 'type': 'file'},
+        {'name': 'file3.txt', 'type': 'file'},
+    ]
+    result = _filter_files_by_relevance(files, "", 2)
+    assert len(result) == 2
+    assert result == files[:2]
+
+
+@pytest.mark.unit
+def test_filter_files_by_relevance_exact_match():
+    """Test file filtering with exact match gets highest priority."""
+    files = [
+        {'name': 'test.py', 'type': 'file'},
+        {'name': 'test_something.py', 'type': 'file'},
+        {'name': 'other.py', 'type': 'file'},
+    ]
+    result = _filter_files_by_relevance(files, 'test.py', 10)
+    assert result[0]['name'] == 'test.py'
+
+
+@pytest.mark.unit
+def test_filter_files_by_relevance_starts_with():
+    """Test file filtering with name starting with query."""
+    files = [
+        {'name': 'test_file.py', 'type': 'file'},
+        {'name': 'other_test.py', 'type': 'file'},
+        {'name': 'main.py', 'type': 'file'},
+    ]
+    result = _filter_files_by_relevance(files, 'test', 10)
+    assert len(result) == 2
+    assert result[0]['name'] == 'test_file.py'
+
+
+@pytest.mark.unit
+def test_filter_files_by_relevance_substring():
+    """Test file filtering with substring match."""
+    files = [
+        {'name': 'config_test.py', 'type': 'file'},
+        {'name': 'test_utils.py', 'type': 'file'},
+        {'name': 'main.py', 'type': 'file'},
+    ]
+    result = _filter_files_by_relevance(files, 'test', 10)
+    assert len(result) == 2
+
+
+@pytest.mark.unit
+def test_filter_files_by_relevance_case_insensitive():
+    """Test file filtering is case-insensitive."""
+    files = [
+        {'name': 'TEST.py', 'type': 'file'},
+        {'name': 'test.py', 'type': 'file'},
+        {'name': 'Test.py', 'type': 'file'},
+    ]
+    result = _filter_files_by_relevance(files, 'test', 10)
+    assert len(result) == 3
+
+
+@pytest.mark.unit
+def test_filter_files_by_relevance_multiple_words():
+    """Test file filtering with multiple query words."""
+    files = [
+        {'name': 'test_config.py', 'type': 'file'},
+        {'name': 'config.py', 'type': 'file'},
+        {'name': 'test.py', 'type': 'file'},
+        {'name': 'main.py', 'type': 'file'},
+    ]
+    result = _filter_files_by_relevance(files, 'test config', 10)
+    assert len(result) >= 1
+    assert result[0]['name'] == 'test_config.py'
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_basic(tmp_path, monkeypatch):
+    """Test basic file listing in temporary directory."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create test files
+    (tmp_path / "file1.txt").write_text("content")
+    (tmp_path / "file2.py").write_text("code")
+    (tmp_path / "dir1").mkdir()
+
+    context = get_file_listing_context()
+
+    assert "directory" in context
+    assert "files" in context
+    assert "total_count" in context
+    assert "truncated" in context
+    assert "depth" in context
+    assert "error" in context
+
+    assert context["directory"] == str(tmp_path)
+    assert context["total_count"] == 3
+    assert context["truncated"] is False
+    assert context["error"] is None
+    assert len(context["files"]) == 3
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_empty_directory(tmp_path, monkeypatch):
+    """Test file listing in empty directory."""
+    monkeypatch.chdir(tmp_path)
+
+    context = get_file_listing_context()
+
+    assert context["directory"] == str(tmp_path)
+    assert context["total_count"] == 0
+    assert context["files"] == []
+    assert context["error"] is None
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_max_files(tmp_path, monkeypatch):
+    """Test max_files limit."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create more files than max_files
+    for i in range(25):
+        (tmp_path / f"file{i}.txt").write_text("content")
+
+    context = get_file_listing_context(max_files=10)
+
+    assert context["total_count"] == 25
+    assert len(context["files"]) == 10
+    assert context["truncated"] is True
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_hidden_files(tmp_path, monkeypatch):
+    """Test hidden files filtering."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create visible and hidden files
+    (tmp_path / "visible.txt").write_text("content")
+    (tmp_path / ".hidden").write_text("secret")
+
+    # Without show_hidden
+    context = get_file_listing_context(show_hidden=False)
+    assert context["total_count"] == 1
+    assert context["files"][0]["name"] == "visible.txt"
+
+    # With show_hidden
+    context = get_file_listing_context(show_hidden=True)
+    assert context["total_count"] == 2
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_sorting(tmp_path, monkeypatch):
+    """Test files are sorted directories first, then alphabetically."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create files and directories in non-alphabetical order
+    (tmp_path / "zebra.txt").write_text("content")
+    (tmp_path / "dir_b").mkdir()
+    (tmp_path / "apple.txt").write_text("content")
+    (tmp_path / "dir_a").mkdir()
+
+    context = get_file_listing_context()
+
+    files = context["files"]
+    # First two should be directories
+    assert files[0]["type"] == "dir"
+    assert files[1]["type"] == "dir"
+    # Directories should be alphabetically sorted
+    assert files[0]["name"] == "dir_a"
+    assert files[1]["name"] == "dir_b"
+    # Then files, alphabetically sorted
+    assert files[2]["name"] == "apple.txt"
+    assert files[3]["name"] == "zebra.txt"
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_with_query(tmp_path, monkeypatch):
+    """Test file listing with query filtering."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create test files
+    (tmp_path / "test_file.py").write_text("code")
+    (tmp_path / "test_data.txt").write_text("data")
+    (tmp_path / "main.py").write_text("code")
+    (tmp_path / "readme.md").write_text("docs")
+
+    context = get_file_listing_context(query="test")
+
+    # Should only return files matching "test"
+    assert len(context["files"]) == 2
+    names = [f["name"] for f in context["files"]]
+    assert "test_file.py" in names
+    assert "test_data.txt" in names
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_depth_zero(tmp_path, monkeypatch):
+    """Test max_depth=0 only scans current directory."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create nested structure
+    (tmp_path / "file.txt").write_text("content")
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    (subdir / "nested.txt").write_text("nested")
+
+    context = get_file_listing_context(max_depth=0)
+
+    # Should only see file.txt and subdir, not nested.txt
+    assert context["total_count"] == 2
+    names = [f["name"] for f in context["files"]]
+    assert "file.txt" in names
+    assert "subdir" in names
+    assert "subdir/nested.txt" not in names
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_depth_one(tmp_path, monkeypatch):
+    """Test max_depth=1 scans one level deep."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create nested structure
+    (tmp_path / "file.txt").write_text("content")
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    (subdir / "nested.txt").write_text("nested")
+    subsubdir = subdir / "subsubdir"
+    subsubdir.mkdir()
+    (subsubdir / "deep.txt").write_text("deep")
+
+    context = get_file_listing_context(max_depth=1)
+
+    # Should see file.txt, subdir, and subdir/nested.txt, but not deeper
+    names = [f["name"] for f in context["files"]]
+    assert "file.txt" in names
+    assert "subdir" in names
+    assert "subdir/nested.txt" in names
+    # Should not see subsubdir contents at depth 2
+    assert not any("subsubdir" in name for name in names if name != "subdir/subsubdir")
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_nonexistent_directory():
+    """Test file listing with nonexistent directory."""
+    context = get_file_listing_context(directory="/nonexistent/path")
+
+    assert context["error"] is not None
+    assert "does not exist" in context["error"].lower()
+    assert context["files"] == []
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_file_not_directory(tmp_path):
+    """Test file listing when path is a file, not directory."""
+    file_path = tmp_path / "file.txt"
+    file_path.write_text("content")
+
+    context = get_file_listing_context(directory=str(file_path))
+
+    assert context["error"] is not None
+    assert "not a directory" in context["error"].lower()
+
+
+@pytest.mark.unit
+def test_format_file_listing_context_normal(tmp_path, monkeypatch):
+    """Test formatting normal file listing."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create test files
+    (tmp_path / "dir1").mkdir()
+    (tmp_path / "file1.txt").write_text("x" * 1024)  # 1 KB
+
+    context = get_file_listing_context()
+    formatted = format_file_listing_context(context)
+
+    assert isinstance(formatted, str)
+    assert str(tmp_path) in formatted
+    assert "dir1/" in formatted
+    assert "file1.txt" in formatted
+    assert "KB" in formatted
+
+
+@pytest.mark.unit
+def test_format_file_listing_context_truncated(tmp_path, monkeypatch):
+    """Test formatting when file list is truncated."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create many files
+    for i in range(25):
+        (tmp_path / f"file{i}.txt").write_text("content")
+
+    context = get_file_listing_context(max_files=10)
+    formatted = format_file_listing_context(context)
+
+    assert "truncated" in formatted.lower()
+    assert "showing 10 of 25" in formatted
+
+
+@pytest.mark.unit
+def test_format_file_listing_context_empty(tmp_path, monkeypatch):
+    """Test formatting empty directory."""
+    monkeypatch.chdir(tmp_path)
+
+    context = get_file_listing_context()
+    formatted = format_file_listing_context(context)
+
+    assert "(empty)" in formatted
+
+
+@pytest.mark.unit
+def test_format_file_listing_context_with_error():
+    """Test formatting when error occurred."""
+    context = {
+        "directory": "/some/path",
+        "files": [],
+        "total_count": 0,
+        "truncated": False,
+        "depth": 1,
+        "error": "Permission denied"
+    }
+
+    formatted = format_file_listing_context(context)
+
+    assert "error" in formatted.lower()
+    assert "Permission denied" in formatted
+    assert "/some/path" in formatted
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_file_metadata(tmp_path, monkeypatch):
+    """Test that file metadata includes all required fields."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create a test file
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("content")
+
+    context = get_file_listing_context()
+
+    assert len(context["files"]) == 1
+    file_info = context["files"][0]
+
+    assert "name" in file_info
+    assert "type" in file_info
+    assert "size" in file_info
+    assert "modified" in file_info
+
+    assert file_info["name"] == "test.txt"
+    assert file_info["type"] == "file"
+    assert isinstance(file_info["size"], int)
+    assert isinstance(file_info["modified"], float)
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_directory_metadata(tmp_path, monkeypatch):
+    """Test that directory metadata is correct."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create a test directory
+    (tmp_path / "testdir").mkdir()
+
+    context = get_file_listing_context()
+
+    assert len(context["files"]) == 1
+    dir_info = context["files"][0]
+
+    assert dir_info["name"] == "testdir"
+    assert dir_info["type"] == "dir"
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_default_directory():
+    """Test that default directory is current working directory."""
+    context = get_file_listing_context()
+
+    assert context["directory"] == os.getcwd()
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_explicit_directory(tmp_path):
+    """Test file listing with explicitly provided directory."""
+    # Create test file
+    (tmp_path / "test.txt").write_text("content")
+
+    context = get_file_listing_context(directory=str(tmp_path))
+
+    assert context["directory"] == str(tmp_path)
+    assert len(context["files"]) == 1
+
+
+@pytest.mark.unit
+def test_get_file_listing_context_handles_permission_errors(tmp_path, monkeypatch):
+    """Test graceful handling of permission errors."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create a directory we'll make unreadable
+    subdir = tmp_path / "restricted"
+    subdir.mkdir()
+
+    # Mock scandir to raise PermissionError
+    original_scandir = os.scandir
+    def mock_scandir(path):
+        if str(path).endswith("restricted"):
+            raise PermissionError("Access denied")
+        return original_scandir(path)
+
+    monkeypatch.setattr("os.scandir", mock_scandir)
+
+    # This should not crash, but handle the error gracefully
+    context = get_file_listing_context(max_depth=1)
+
+    # The function should continue with other files
+    # (behavior depends on where the permission error occurs)

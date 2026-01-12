@@ -693,3 +693,279 @@ def format_env_context(context: dict[str, Any]) -> str:
         lines.append(f"Missing: {', '.join(context['missing'])}")
 
     return "\n".join(lines)
+
+
+def _format_file_size(size_bytes: int) -> str:
+    """
+    Convert bytes to human-readable format (B, KB, MB, GB).
+
+    Args:
+        size_bytes: File size in bytes
+
+    Returns:
+        str: Human-readable file size
+
+    Example:
+        >>> _format_file_size(1024)
+        '1.0 KB'
+        >>> _format_file_size(1536)
+        '1.5 KB'
+        >>> _format_file_size(1048576)
+        '1.0 MB'
+    """
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+
+def _filter_files_by_relevance(
+    files: list[dict[str, Any]],
+    query: str,
+    max_files: int
+) -> list[dict[str, Any]]:
+    """
+    Score files based on query relevance (case-insensitive substring matching).
+
+    Args:
+        files: List of file dictionaries
+        query: User query for relevance scoring
+        max_files: Maximum number of files to return
+
+    Returns:
+        list: Filtered and sorted list of files by relevance
+
+    Example:
+        >>> files = [{'name': 'test.py', 'type': 'file'}, {'name': 'data.txt', 'type': 'file'}]
+        >>> _filter_files_by_relevance(files, 'test', 10)
+        [{'name': 'test.py', 'type': 'file'}]
+    """
+    if not query:
+        return files[:max_files]
+
+    query_lower = query.lower()
+    scored_files = []
+
+    for file_info in files:
+        name_lower = file_info['name'].lower()
+        score = 0
+
+        # Exact match gets highest score
+        if name_lower == query_lower:
+            score = 1000
+        # Name starts with query
+        elif name_lower.startswith(query_lower):
+            score = 500
+        # Query is substring of name
+        elif query_lower in name_lower:
+            score = 100
+        # Check individual query words
+        else:
+            query_words = query_lower.split()
+            for word in query_words:
+                if word in name_lower:
+                    score += 10
+
+        if score > 0:
+            scored_files.append((score, file_info))
+
+    # Sort by score descending, then by name
+    scored_files.sort(key=lambda x: (-x[0], x[1]['name'].lower()))
+
+    # Return top max_files
+    return [file_info for _, file_info in scored_files[:max_files]]
+
+
+def get_file_listing_context(
+    directory: Optional[str] = None,
+    max_files: int = 20,
+    max_depth: int = 1,
+    show_hidden: bool = False,
+    query: Optional[str] = None
+) -> dict[str, Any]:
+    """
+    Collect file listing with efficient directory traversal.
+
+    Args:
+        directory: Absolute path to directory (default: current working directory)
+        max_files: Maximum files to include in listing
+        max_depth: Directory depth to scan (0=current only, 1=one level deep)
+        show_hidden: Include hidden files (starting with '.')
+        query: Optional query for relevance filtering
+
+    Returns:
+        dict: Dictionary containing file listing with keys:
+            - directory: Absolute path to directory
+            - files: List of file dicts with keys: name, type (file/dir), size, modified
+            - total_count: Total number of items found
+            - truncated: Boolean indicating if list was truncated
+            - depth: Depth level scanned
+            - error: Error message if collection failed
+
+    Example:
+        >>> context = get_file_listing_context()
+        >>> print(context['directory'])
+        '/home/user/project'
+        >>> print(context['files'][0])
+        {'name': 'README.md', 'type': 'file', 'size': 1024, 'modified': 1234567890}
+    """
+    context = {
+        "directory": None,
+        "files": [],
+        "total_count": 0,
+        "truncated": False,
+        "depth": max_depth,
+        "error": None,
+    }
+
+    try:
+        # Determine directory to scan
+        if directory is None:
+            directory = os.getcwd()
+
+        directory = os.path.abspath(directory)
+        context["directory"] = directory
+
+        # Check if directory exists
+        dir_path = Path(directory)
+        if not dir_path.exists():
+            context["error"] = "Directory does not exist"
+            return context
+
+        if not dir_path.is_dir():
+            context["error"] = "Path is not a directory"
+            return context
+
+        # Collect files using os.scandir for efficiency
+        all_files = []
+
+        def scan_directory(path: Path, current_depth: int):
+            """Recursively scan directory up to max_depth."""
+            if current_depth > max_depth:
+                return
+
+            try:
+                with os.scandir(path) as entries:
+                    for entry in entries:
+                        # Skip hidden files unless show_hidden is True
+                        if not show_hidden and entry.name.startswith('.'):
+                            continue
+
+                        try:
+                            # Get file info
+                            stat_info = entry.stat(follow_symlinks=False)
+
+                            file_info = {
+                                "name": entry.name if current_depth == 0 else str(Path(entry.path).relative_to(dir_path)),
+                                "type": "dir" if entry.is_dir(follow_symlinks=False) else "file",
+                                "size": stat_info.st_size,
+                                "modified": stat_info.st_mtime,
+                            }
+
+                            all_files.append(file_info)
+
+                            # Recurse into subdirectories if within depth limit
+                            if entry.is_dir(follow_symlinks=False) and current_depth < max_depth:
+                                scan_directory(Path(entry.path), current_depth + 1)
+
+                        except (PermissionError, OSError):
+                            # Skip files we can't access
+                            continue
+
+            except PermissionError:
+                if current_depth == 0:
+                    context["error"] = "Permission denied reading directory"
+            except OSError as e:
+                if current_depth == 0:
+                    context["error"] = f"Error reading directory: {e}"
+
+        # Scan the directory
+        scan_directory(dir_path, 0)
+
+        # Sort: directories first, then by name (case-insensitive)
+        all_files.sort(key=lambda x: (x['type'] != 'dir', x['name'].lower()))
+
+        # Track total count before filtering
+        context["total_count"] = len(all_files)
+
+        # Filter by relevance if query provided
+        if query:
+            filtered_files = _filter_files_by_relevance(all_files, query, max_files)
+        else:
+            filtered_files = all_files[:max_files]
+
+        context["files"] = filtered_files
+        context["truncated"] = len(all_files) > max_files
+
+    except OSError as e:
+        context["error"] = f"Error accessing directory: {e}"
+    except Exception as e:
+        context["error"] = f"Unexpected error: {e}"
+
+    return context
+
+
+def format_file_listing_context(context: dict[str, Any]) -> str:
+    """
+    Format file listing as human-readable output.
+
+    Args:
+        context: Context dictionary from get_file_listing_context()
+
+    Returns:
+        str: Formatted file listing string
+
+    Example:
+        >>> context = get_file_listing_context()
+        >>> print(format_file_listing_context(context))
+        Files in /home/user/project (showing 20 of 150):
+          dir1/
+          dir2/
+          file1.txt (1.2 KB)
+          file2.py (3.4 KB)
+        (truncated, showing 20 of 150 files)
+    """
+    lines = []
+
+    if context.get("error"):
+        lines.append(f"Error listing files: {context['error']}")
+        if context.get("directory"):
+            lines.append(f"Directory: {context['directory']}")
+        return "\n".join(lines)
+
+    directory = context.get("directory", "unknown")
+    files = context.get("files", [])
+    total_count = context.get("total_count", 0)
+    truncated = context.get("truncated", False)
+
+    # Header
+    if truncated:
+        lines.append(f"Files in {directory} (showing {len(files)} of {total_count}):")
+    else:
+        lines.append(f"Files in {directory} ({total_count} items):")
+
+    # List files
+    if not files:
+        lines.append("  (empty)")
+    else:
+        for file_info in files:
+            name = file_info['name']
+            file_type = file_info['type']
+
+            if file_type == 'dir':
+                # Add trailing slash for directories
+                lines.append(f"  {name}/")
+            else:
+                # Show file size for regular files
+                size_str = _format_file_size(file_info['size'])
+                lines.append(f"  {name} ({size_str})")
+
+    # Footer if truncated
+    if truncated:
+        lines.append(f"(truncated, showing {len(files)} of {total_count} files)")
+
+    return "\n".join(lines)

@@ -16,7 +16,7 @@ from hai_sh.config import (
     ConfigError as ConfigLoadError,
     get_available_provider,
 )
-from hai_sh.context import get_cwd_context, get_git_context, get_env_context
+from hai_sh.context import get_cwd_context, get_git_context, get_env_context, get_file_listing_context
 from hai_sh.prompt import build_system_prompt, generate_with_retry
 from hai_sh.executor import execute_command
 from hai_sh.output import should_use_color
@@ -236,21 +236,41 @@ def handle_execution_error(error: str):
     )
 
 
-def gather_context_parallel() -> Dict[str, Any]:
+def gather_context_parallel(user_query: str = "", config: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Gather context information in parallel for faster startup.
 
+    Args:
+        user_query: User query for file relevance filtering
+        config: Configuration dictionary for context settings
+
     Returns:
-        Dict[str, Any]: Context dictionary with cwd, git, and env information
+        Dict[str, Any]: Context dictionary with cwd, git, env, and file information
     """
     context: Dict[str, Any] = {}
+    config = config or {}
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    # Determine number of workers based on what we're collecting
+    include_files = config.get('context', {}).get('include_file_listing', True)
+    max_workers = 4 if include_files else 3
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(get_cwd_context): 'cwd',
             executor.submit(get_git_context): 'git',
             executor.submit(get_env_context): 'env',
         }
+
+        # Add file listing if enabled
+        if include_files:
+            file_listing_config = config.get('context', {})
+            futures[executor.submit(
+                get_file_listing_context,
+                max_files=file_listing_config.get('file_listing_max_files', 20),
+                max_depth=file_listing_config.get('file_listing_max_depth', 1),
+                show_hidden=file_listing_config.get('file_listing_show_hidden', False),
+                query=user_query
+            )] = 'files'
 
         for future in as_completed(futures):
             key = futures[future]
@@ -384,7 +404,7 @@ def main():
             return 1
 
         # Gather context in parallel for faster startup
-        context = gather_context_parallel()
+        context = gather_context_parallel(user_query=user_query, config=config)
 
         # Build system prompt with context
         system_prompt = build_system_prompt(context)

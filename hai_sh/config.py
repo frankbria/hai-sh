@@ -46,6 +46,10 @@ DEFAULT_CONFIG = {
         "history_length": 10,
         "include_env_vars": True,
         "include_git_state": True,
+        "include_file_listing": True,
+        "file_listing_max_files": 20,
+        "file_listing_max_depth": 1,
+        "file_listing_show_hidden": False,
     },
     "output": {
         "show_conversation": True,
