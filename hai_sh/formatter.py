@@ -677,7 +677,8 @@ def format_enhanced_output(
     # Execution panel
     if execution_result:
         exec_parts = []
-        exec_parts.append(f"[bold green]$[/bold green] [bold]{response.command}[/bold]")
+        if response.command:
+            exec_parts.append(f"[bold green]$[/bold green] [bold]{response.command}[/bold]")
         if execution_result.stdout:
             exec_parts.append(execution_result.stdout.rstrip())
         if execution_result.stderr:

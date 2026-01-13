@@ -268,7 +268,7 @@ def test_validate_config_dict_with_tui():
         },
     }
 
-    validated_config, warnings = validate_config_dict(config_dict)
+    validated_config, _warnings = validate_config_dict(config_dict)
 
     assert validated_config.output.tui.enabled is True
     assert validated_config.output.tui.meta_collapsed_by_default is False

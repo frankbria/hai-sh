@@ -192,8 +192,8 @@ class ExecutionPanel:
 
     @property
     def is_success(self) -> bool:
-        """Check if command succeeded."""
-        return self._exit_code == 0
+        """Check if command succeeded (mirrors ExecutionResult.success)."""
+        return self._exit_code == 0 and not self._timed_out and not self._interrupted
 
 
 class MenuBar:

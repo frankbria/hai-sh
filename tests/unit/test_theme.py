@@ -90,9 +90,8 @@ def test_confidence_bar_width():
     from hai_sh.theme import create_confidence_bar
 
     bar = create_confidence_bar(50, width=20)
-    # Should have approximately 10 filled and 10 empty (within visible chars)
-    visible_length = len(bar.replace("[", "").replace("]", ""))
-    assert visible_length >= 20
+    # Should have exactly 20 characters (10 filled + 10 empty for 50%)
+    assert len(bar) == 20
 
 
 # --- Panel Style Tests ---
