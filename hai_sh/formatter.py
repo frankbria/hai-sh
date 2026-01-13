@@ -606,7 +606,7 @@ def format_rich_execution(
     panel = Panel(
         combined,
         title="Execution",
-        border_style=get_rich_style("success") if exit_code == 0 else get_rich_style("error"),
+        border_style="blue" if exit_code is None else get_rich_style("success") if exit_code == 0 else get_rich_style("error"),
         box=ROUNDED,
     )
 
