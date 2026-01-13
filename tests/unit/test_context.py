@@ -1383,7 +1383,9 @@ def test_get_file_listing_context_handles_permission_errors(tmp_path, monkeypatc
     monkeypatch.setattr("os.scandir", mock_scandir)
 
     # This should not crash, but handle the error gracefully
-    context = get_file_listing_context(max_depth=1)
+    result = get_file_listing_context(max_depth=1)
 
-    # The function should continue with other files
-    # (behavior depends on where the permission error occurs)
+    # Verify the function returned a valid context structure
+    assert "files" in result
+    assert "error" in result
+    assert "directory" in result
