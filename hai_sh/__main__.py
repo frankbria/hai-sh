@@ -172,12 +172,32 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--app-mode",
+        action="store_true",
+        help="launch interactive TUI mode"
+    )
+
+    parser.add_argument(
         "query",
         nargs="*",
         help="natural language command description"
     )
 
     return parser
+
+
+def should_use_app_mode(app_mode_flag: bool, env_var_set: bool) -> bool:
+    """
+    Determine if app mode should be used.
+
+    Args:
+        app_mode_flag: Value of --app-mode flag
+        env_var_set: Whether HAI_APP_MODE env var is set
+
+    Returns:
+        True if app mode should be used
+    """
+    return app_mode_flag or env_var_set
 
 
 def handle_init_error(error: str):

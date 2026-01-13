@@ -1,12 +1,82 @@
 """
 Pydantic schema models for hai-sh configuration validation.
 
-This module defines the structure and validation rules for configuration files.
+This module defines the structure and validation rules for configuration files,
+as well as LLM response models for structured output parsing.
 """
 
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
+
+
+class LLMResponse(BaseModel):
+    """
+    Structured response from LLM providers.
+
+    This model captures the conversation/explanation, optional command,
+    confidence score, and optional internal dialogue for meta reasoning.
+    """
+
+    conversation: str = Field(
+        description="LLM explanation or answer to the user's query",
+    )
+    command: Optional[str] = Field(
+        None,
+        description="Bash command to execute (None for question-only responses)",
+    )
+    confidence: int = Field(
+        description="Confidence score for the response (0-100)",
+        ge=0,
+        le=100,
+    )
+    internal_dialogue: Optional[str] = Field(
+        None,
+        description="Internal reasoning/meta dialogue (1-2 lines of meta reasoning)",
+    )
+
+    @computed_field
+    @property
+    def confidence_level(self) -> Literal["low", "medium", "high"]:
+        """
+        Classify confidence into low/medium/high categories.
+
+        Returns:
+            'high' for confidence >= 80
+            'medium' for confidence 50-79
+            'low' for confidence < 50
+        """
+        if self.confidence >= 80:
+            return "high"
+        elif self.confidence >= 50:
+            return "medium"
+        else:
+            return "low"
+
+
+class TUIConfig(BaseModel):
+    """TUI (Text User Interface) configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable TUI features when running in interactive mode",
+    )
+    meta_collapsed_by_default: bool = Field(
+        default=True,
+        description="Start with meta information panel collapsed",
+    )
+    show_internal_dialogue: bool = Field(
+        default=False,
+        description="Display internal dialogue from LLM responses",
+    )
+    show_confidence_bar: bool = Field(
+        default=True,
+        description="Display visual confidence bar",
+    )
+    theme: Literal["dark", "light", "auto"] = Field(
+        default="auto",
+        description="Color theme for TUI: dark, light, or auto (detect from terminal)",
+    )
 
 
 class OpenAIProviderConfig(BaseModel):
@@ -178,6 +248,10 @@ class OutputConfig(BaseModel):
     use_colors: bool = Field(
         default=True,
         description="Use ANSI colors in output",
+    )
+    tui: TUIConfig = Field(
+        default_factory=TUIConfig,
+        description="TUI-specific configuration",
     )
 
 

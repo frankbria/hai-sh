@@ -471,3 +471,313 @@ def strip_formatting(text: str) -> str:
         text = text.replace("\n\n\n", "\n\n")
 
     return text.strip()
+
+
+# =============================================================================
+# Rich-based TUI Formatter Functions
+# =============================================================================
+
+from io import StringIO
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.box import DOUBLE, ROUNDED
+
+from hai_sh.theme import (
+    get_confidence_color_from_score,
+    create_confidence_bar,
+    get_rich_style,
+    PANEL_STYLES,
+)
+
+
+def get_rich_console(
+    force_color: Optional[bool] = None,
+    width: Optional[int] = None,
+) -> Console:
+    """
+    Get a Rich Console for output.
+
+    Args:
+        force_color: Force color on/off (None for auto-detect)
+        width: Optional fixed width (None for auto-detect)
+
+    Returns:
+        Rich Console instance
+    """
+    if force_color is True:
+        return Console(force_terminal=True, width=width)
+    elif force_color is False:
+        return Console(no_color=True, force_terminal=False, width=width)
+    else:
+        return Console(width=width)
+
+
+def format_rich_conversation(
+    content: str,
+    confidence: Optional[int] = None,
+) -> str:
+    """
+    Format conversation content using Rich styling.
+
+    Args:
+        content: The conversation/explanation text
+        confidence: Optional confidence score
+
+    Returns:
+        Formatted string with Rich styling
+    """
+    console = Console(file=StringIO(), force_terminal=True, width=80)
+
+    # Build conversation text
+    text_parts = []
+    if content:
+        text_parts.append(content)
+
+    if confidence is not None:
+        confidence_str = format_rich_confidence(confidence)
+        text_parts.append(confidence_str)
+
+    full_text = "\n\n".join(text_parts)
+
+    # Create and print panel
+    panel = Panel(
+        full_text,
+        title="Conversation",
+        border_style=get_rich_style("conversation"),
+        box=DOUBLE,
+    )
+
+    console.print(panel)
+    return console.file.getvalue()
+
+
+def format_rich_execution(
+    command: str,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: Optional[int] = None,
+) -> str:
+    """
+    Format execution output using Rich styling.
+
+    Args:
+        command: The command that was executed
+        stdout: Standard output from command
+        stderr: Standard error from command
+        exit_code: Exit code from command
+
+    Returns:
+        Formatted string with Rich styling
+    """
+    console = Console(file=StringIO(), force_terminal=True, width=80)
+
+    # Build content
+    parts = []
+
+    # Command prompt
+    prompt_text = Text()
+    prompt_text.append("$ ", style="bold green")
+    prompt_text.append(command, style="bold white")
+    parts.append(prompt_text)
+
+    # Stdout
+    if stdout:
+        parts.append(Text(stdout.rstrip()))
+
+    # Stderr
+    if stderr:
+        error_text = Text()
+        error_text.append("\nErrors:\n", style="bold red")
+        error_text.append(stderr.rstrip(), style="red")
+        parts.append(error_text)
+
+    # Exit code indicator
+    if exit_code is not None and exit_code != 0:
+        status_text = Text()
+        status_text.append(f"\n✗ Exit code: {exit_code}", style="bold red")
+        parts.append(status_text)
+
+    # Combine parts
+    combined = Text("\n").join(parts)
+
+    # Create panel
+    panel = Panel(
+        combined,
+        title="Execution",
+        border_style=get_rich_style("success") if exit_code == 0 else get_rich_style("error"),
+        box=ROUNDED,
+    )
+
+    console.print(panel)
+    return console.file.getvalue()
+
+
+def format_rich_confidence(confidence: int) -> str:
+    """
+    Format confidence score using Rich styling.
+
+    Args:
+        confidence: Confidence score (0-100)
+
+    Returns:
+        Formatted confidence string with color and bar
+    """
+    color = get_confidence_color_from_score(confidence)
+    bar = create_confidence_bar(confidence)
+
+    return f"[{color}]Confidence: {confidence}% [{bar}][/{color}]"
+
+
+def format_enhanced_output(
+    response,
+    execution_result=None,
+    show_internal_dialogue: bool = False,
+) -> str:
+    """
+    Format LLMResponse with enhanced Rich styling.
+
+    This is the main entry point for TUI-enhanced output.
+
+    Args:
+        response: LLMResponse object
+        execution_result: Optional ExecutionResult from command execution
+        show_internal_dialogue: Whether to display internal dialogue
+
+    Returns:
+        Formatted string with Rich styling
+    """
+    console = Console(file=StringIO(), force_terminal=True, width=80)
+
+    parts = []
+
+    # Conversation panel
+    conv_content = response.conversation
+    if response.confidence is not None:
+        conv_content += f"\n\n{format_rich_confidence(response.confidence)}"
+
+    conv_panel = Panel(
+        conv_content,
+        title="Conversation",
+        border_style="blue",
+        box=DOUBLE,
+    )
+    parts.append(conv_panel)
+
+    # Meta panel (internal dialogue)
+    if show_internal_dialogue and response.internal_dialogue:
+        meta_panel = Panel(
+            response.internal_dialogue,
+            title="Internal Reasoning",
+            border_style="dim cyan",
+        )
+        parts.append(meta_panel)
+
+    # Execution panel
+    if execution_result:
+        exec_parts = []
+        exec_parts.append(f"[bold green]$[/bold green] [bold]{response.command}[/bold]")
+        if execution_result.stdout:
+            exec_parts.append(execution_result.stdout.rstrip())
+        if execution_result.stderr:
+            exec_parts.append(f"[red]{execution_result.stderr.rstrip()}[/red]")
+
+        exec_panel = Panel(
+            "\n".join(exec_parts),
+            title="Execution",
+            border_style="green" if execution_result.success else "red",
+            box=ROUNDED,
+        )
+        parts.append(exec_panel)
+
+    for part in parts:
+        console.print(part)
+
+    return console.file.getvalue()
+
+
+def create_conversation_panel(content: str, confidence: Optional[int] = None) -> Panel:
+    """
+    Create a Rich Panel for conversation content.
+
+    Args:
+        content: Conversation text
+        confidence: Optional confidence score
+
+    Returns:
+        Rich Panel instance
+    """
+    panel_content = content
+    if confidence is not None:
+        panel_content += f"\n\n{format_rich_confidence(confidence)}"
+
+    return Panel(
+        panel_content,
+        title="Conversation",
+        border_style="blue",
+        box=DOUBLE,
+    )
+
+
+def create_execution_panel(
+    command: str,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: Optional[int] = None,
+) -> Panel:
+    """
+    Create a Rich Panel for execution output.
+
+    Args:
+        command: The command
+        stdout: Standard output
+        stderr: Standard error
+        exit_code: Exit code
+
+    Returns:
+        Rich Panel instance
+    """
+    parts = [f"[bold green]$[/bold green] [bold]{command}[/bold]"]
+
+    if stdout:
+        parts.append(stdout.rstrip())
+    if stderr:
+        parts.append(f"[red]{stderr.rstrip()}[/red]")
+    if exit_code is not None and exit_code != 0:
+        parts.append(f"[bold red]✗ Exit code: {exit_code}[/bold red]")
+
+    border_style = "green" if exit_code == 0 else ("red" if exit_code else "blue")
+
+    return Panel(
+        "\n".join(parts),
+        title="Execution",
+        border_style=border_style,
+        box=ROUNDED,
+    )
+
+
+def create_meta_panel(
+    confidence: int,
+    internal_dialogue: Optional[str] = None,
+) -> Panel:
+    """
+    Create a Rich Panel for meta information.
+
+    Args:
+        confidence: Confidence score
+        internal_dialogue: Optional internal reasoning text
+
+    Returns:
+        Rich Panel instance
+    """
+    parts = [format_rich_confidence(confidence)]
+
+    if internal_dialogue:
+        parts.append(f"\n[dim]{internal_dialogue}[/dim]")
+
+    return Panel(
+        "".join(parts),
+        title="Meta",
+        border_style="dim cyan",
+    )
