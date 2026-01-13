@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from hai_sh import __version__, init_hai_directory
+from hai_sh.app_mode import is_app_mode, run_app_mode
 from hai_sh.config import (
     load_config,
     ConfigError as ConfigLoadError,
@@ -20,6 +21,7 @@ from hai_sh.context import get_cwd_context, get_git_context, get_env_context, ge
 from hai_sh.prompt import build_system_prompt, generate_with_retry
 from hai_sh.executor import execute_command
 from hai_sh.output import should_use_color
+from hai_sh.schema import validate_config_dict
 
 # Module logger for debug output
 _logger = logging.getLogger(__name__)
@@ -169,6 +171,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--confirm",
         action="store_true",
         help="always require confirmation before executing (overrides config)"
+    )
+
+    parser.add_argument(
+        "--app-mode",
+        action="store_true",
+        help="launch interactive TUI mode"
     )
 
     parser.add_argument(
@@ -395,7 +403,22 @@ def main():
         if args.no_color:
             os.environ['NO_COLOR'] = '1'
 
-        # Load configuration
+        # Check if app mode should be used (--app-mode flag or HAI_APP_MODE env var)
+        if is_app_mode(args.app_mode):
+            # Load and validate config for app mode
+            config_path = Path(args.config) if args.config else None
+            try:
+                config_dict = load_config(config_path=config_path, use_pydantic=False)
+                validated_config, _warnings = validate_config_dict(config_dict)
+                return run_app_mode(validated_config, user_query)
+            except ConfigLoadError as e:
+                handle_config_error(str(e))
+                return 1
+            except Exception as e:
+                handle_config_error(str(e))
+                return 1
+
+        # Load configuration for standard mode
         config_path = Path(args.config) if args.config else None
         try:
             config = load_config(config_path=config_path, use_pydantic=False)

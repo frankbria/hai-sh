@@ -21,6 +21,11 @@
 # This is chosen for portability across different terminals
 : "${HAI_KEY_BINDING:=\C-x\C-h}"
 
+# App mode environment variable (set to 1 to enable TUI mode)
+# Export this to enable interactive TUI mode when using hai
+# Example: export HAI_APP_MODE=1
+export HAI_APP_MODE="${HAI_APP_MODE:-0}"
+
 # Check if hai command is available (skip in testing mode)
 if [[ -z "$HAI_TESTING" ]] && ! command -v hai &> /dev/null; then
     echo "Warning: 'hai' command not found. Install hai-sh first." >&2
