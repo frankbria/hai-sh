@@ -960,9 +960,13 @@ def format_file_listing_context(context: dict[str, Any]) -> str:
                 # Add trailing slash for directories
                 lines.append(f"  {name}/")
             else:
-                # Show file size for regular files
-                size_str = _format_file_size(file_info['size'])
-                lines.append(f"  {name} ({size_str})")
+            else:
+                size = file_info.get('size')
+                if isinstance(size, int):
+                    size_str = _format_file_size(size)
+                    lines.append(f"  {name} ({size_str})")
+                else:
+                    lines.append(f"  {name}")
 
     # Footer if truncated
     if truncated:
