@@ -196,6 +196,13 @@ def _format_context(context: dict[str, Any]) -> str:
         if env_parts:
             parts.append(", ".join(env_parts))
 
+    # File listing context (NEW)
+    if "files" in context:
+        from hai_sh.context import format_file_listing_context
+        file_listing = format_file_listing_context(context["files"])
+        if file_listing:
+            parts.append(file_listing)
+
     return "\n".join(parts) if parts else "No specific context provided."
 
 

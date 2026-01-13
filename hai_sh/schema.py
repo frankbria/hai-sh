@@ -142,6 +142,26 @@ class ContextConfig(BaseModel):
         default=True,
         description="Include git repository state",
     )
+    include_file_listing: bool = Field(
+        default=True,
+        description="Include file listing of current directory in context",
+    )
+    file_listing_max_files: int = Field(
+        default=20,
+        description="Maximum number of files to include in listing",
+        ge=0,
+        le=1000,
+    )
+    file_listing_max_depth: int = Field(
+        default=1,
+        description="Maximum directory depth for file listing",
+        ge=0,
+        le=10,
+    )
+    file_listing_show_hidden: bool = Field(
+        default=False,
+        description="Include hidden files (starting with .) in listing",
+    )
 
 
 class OutputConfig(BaseModel):
