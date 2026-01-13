@@ -180,7 +180,7 @@ def _format_context(context: dict[str, Any]) -> str:
     if "git" in context:
         git_info = context["git"]
         # Check for pre-formatted git context from collect_context
-        if "formatted" in git_info:
+        if isinstance(git_info, dict) and "formatted" in git_info:
             parts.append(git_info["formatted"])
         elif git_info.get("is_repo"):
             git_parts = [f"Git branch: {git_info.get('branch', 'unknown')}"]
