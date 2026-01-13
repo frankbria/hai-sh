@@ -975,3 +975,696 @@ def format_file_listing_context(context: dict[str, Any]) -> str:
         lines.append(f"(truncated, showing {len(files)} of {total_count} files)")
 
     return "\n".join(lines)
+
+
+# ============================================================================
+# Shell History Collection
+# ============================================================================
+
+
+def _detect_shell_type() -> str:
+    """
+    Detect the current shell type from SHELL environment variable.
+
+    Returns:
+        str: Shell type ('bash', 'zsh', 'fish', or 'unknown')
+
+    Example:
+        >>> os.environ['SHELL'] = '/bin/bash'
+        >>> _detect_shell_type()
+        'bash'
+    """
+    shell_path = os.environ.get("SHELL", "")
+    shell_name = Path(shell_path).name.lower() if shell_path else ""
+
+    if "bash" in shell_name:
+        return "bash"
+    elif "zsh" in shell_name:
+        return "zsh"
+    elif "fish" in shell_name:
+        return "fish"
+    else:
+        return "unknown"
+
+
+def _get_history_file_path(shell_type: str) -> Optional[Path]:
+    """
+    Get the history file path for the given shell type.
+
+    Args:
+        shell_type: The shell type ('bash', 'zsh', 'fish', or 'unknown')
+
+    Returns:
+        Path: Path to history file if it exists, None otherwise
+
+    Example:
+        >>> _get_history_file_path('bash')
+        PosixPath('/home/user/.bash_history')
+    """
+    home = os.environ.get("HOME", "")
+    if not home:
+        return None
+
+    home_path = Path(home)
+
+    history_paths = {
+        "bash": home_path / ".bash_history",
+        "zsh": home_path / ".zsh_history",
+        "fish": home_path / ".local" / "share" / "fish" / "fish_history",
+    }
+
+    history_file = history_paths.get(shell_type)
+
+    if history_file and history_file.exists():
+        return history_file
+
+    return None
+
+
+def _is_sensitive_command(command: str) -> bool:
+    """
+    Check if a command appears to contain sensitive information.
+
+    Filters out commands that contain passwords, API keys, tokens, etc.
+
+    Args:
+        command: Shell command to check
+
+    Returns:
+        bool: True if command contains sensitive information
+
+    Example:
+        >>> _is_sensitive_command('export API_KEY=secret')
+        True
+        >>> _is_sensitive_command('ls -la')
+        False
+    """
+    command_upper = command.upper()
+
+    # Patterns indicating sensitive data
+    sensitive_patterns = [
+        # Credentials
+        "PASSWORD", "PASSWD", "PWD=",
+        "SECRET", "TOKEN", "CREDENTIAL",
+        # API keys
+        "API_KEY", "APIKEY", "API_SECRET",
+        "ACCESS_KEY", "SECRET_KEY",
+        # Auth headers
+        "AUTHORIZATION:", "BEARER ",
+        # Database
+        "-P", "-PPASSWORD",  # MySQL password flag
+        "MYSQL_PWD",
+        # SSH
+        "SSH-ADD", "SSH -I",
+        # Cloud
+        "AWS_SECRET", "OPENAI_API", "ANTHROPIC_API",
+        # Env exports of sensitive vars
+        "PRIVATE_KEY",
+    ]
+
+    for pattern in sensitive_patterns:
+        if pattern in command_upper:
+            return True
+
+    # Check for password flags in common commands
+    # e.g., mysql -u root -ppassword
+    if "-P" in command and ("MYSQL" in command_upper or "PSQL" in command_upper):
+        return True
+
+    return False
+
+
+def _parse_bash_history(lines: list[str]) -> list[str]:
+    """
+    Parse bash history format (simple line-based).
+
+    Args:
+        lines: Lines from .bash_history file
+
+    Returns:
+        list: Parsed commands
+    """
+    commands = []
+    for line in lines:
+        line = line.strip()
+        if line:
+            commands.append(line)
+    return commands
+
+
+def _parse_zsh_history(lines: list[str]) -> list[str]:
+    """
+    Parse zsh extended history format.
+
+    Zsh format: `: timestamp:duration;command`
+
+    Args:
+        lines: Lines from .zsh_history file
+
+    Returns:
+        list: Parsed commands
+    """
+    commands = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check for extended history format
+        if line.startswith(": ") and ";" in line:
+            # Extract command after the semicolon
+            semicolon_idx = line.find(";")
+            if semicolon_idx != -1:
+                command = line[semicolon_idx + 1:].strip()
+                if command:
+                    commands.append(command)
+        else:
+            # Simple format, just add the line
+            commands.append(line)
+
+    return commands
+
+
+def _parse_fish_history(content: str) -> list[str]:
+    """
+    Parse fish shell history format (YAML-like).
+
+    Fish format:
+        - cmd: command here
+          when: timestamp
+
+    Args:
+        content: Content of fish_history file
+
+    Returns:
+        list: Parsed commands
+    """
+    commands = []
+    lines = content.split("\n")
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("- cmd:"):
+            # Extract command after "- cmd:"
+            command = line[6:].strip()
+            if command:
+                commands.append(command)
+
+    return commands
+
+
+def get_shell_history(length: int = 10) -> dict[str, Any]:
+    """
+    Collect shell history from the current shell's history file.
+
+    Detects the shell type, reads the appropriate history file,
+    and filters out sensitive commands.
+
+    Args:
+        length: Maximum number of recent commands to include (default: 10)
+
+    Returns:
+        dict: Dictionary containing shell history with keys:
+            - commands: List of recent commands (filtered for sensitive data)
+            - shell_type: Type of shell ('bash', 'zsh', 'fish', 'unknown')
+            - total_count: Total number of commands in history
+            - filtered_count: Number of commands filtered out for sensitivity
+            - error: Error message if collection failed
+
+    Example:
+        >>> context = get_shell_history(length=5)
+        >>> print(context['shell_type'])
+        'bash'
+        >>> print(context['commands'])
+        ['ls -la', 'git status', 'cd projects']
+    """
+    context = {
+        "commands": [],
+        "shell_type": "unknown",
+        "total_count": 0,
+        "filtered_count": 0,
+        "error": None,
+    }
+
+    try:
+        # Detect shell type
+        shell_type = _detect_shell_type()
+        context["shell_type"] = shell_type
+
+        # Get history file path
+        history_path = _get_history_file_path(shell_type)
+
+        if history_path is None:
+            context["error"] = f"History file not found for {shell_type} shell"
+            return context
+
+        # Read history file
+        try:
+            with open(history_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except PermissionError:
+            context["error"] = "Permission denied reading history file"
+            return context
+        except OSError as e:
+            context["error"] = f"Error reading history file: {e}"
+            return context
+
+        # Parse based on shell type
+        if shell_type == "fish":
+            all_commands = _parse_fish_history(content)
+        elif shell_type == "zsh":
+            lines = content.split("\n")
+            all_commands = _parse_zsh_history(lines)
+        else:
+            # Default to bash parsing
+            lines = content.split("\n")
+            all_commands = _parse_bash_history(lines)
+
+        context["total_count"] = len(all_commands)
+
+        # Filter sensitive commands and get last N
+        filtered_commands = []
+        filtered_count = 0
+
+        for command in all_commands:
+            if _is_sensitive_command(command):
+                filtered_count += 1
+            else:
+                filtered_commands.append(command)
+
+        context["filtered_count"] = filtered_count
+
+        # Get last N commands (most recent)
+        context["commands"] = filtered_commands[-length:] if length > 0 else []
+
+    except Exception as e:
+        context["error"] = f"Unexpected error: {e}"
+
+    return context
+
+
+def format_shell_history(context: dict[str, Any]) -> str:
+    """
+    Format shell history context as human-readable string.
+
+    Args:
+        context: Context dictionary from get_shell_history()
+
+    Returns:
+        str: Formatted shell history string
+
+    Example:
+        >>> context = get_shell_history()
+        >>> print(format_shell_history(context))
+        Recent Commands (bash):
+          1. ls -la
+          2. git status
+          3. cd projects
+    """
+    lines = []
+
+    if context.get("error"):
+        lines.append(f"Shell History Error: {context['error']}")
+        return "\n".join(lines)
+
+    commands = context.get("commands", [])
+    shell_type = context.get("shell_type", "unknown")
+    filtered_count = context.get("filtered_count", 0)
+
+    if not commands:
+        return ""  # Empty history, don't add noise
+
+    # Header
+    lines.append(f"Recent Commands ({shell_type}):")
+
+    # Limit display to reasonable number
+    display_commands = commands[-10:]  # Show at most 10
+
+    for i, cmd in enumerate(display_commands, 1):
+        # Truncate very long commands
+        if len(cmd) > 80:
+            cmd = cmd[:77] + "..."
+        lines.append(f"  {i}. {cmd}")
+
+    # Footer with filtering info if applicable
+    if filtered_count > 0:
+        lines.append(f"  ({filtered_count} sensitive command(s) filtered)")
+
+    return "\n".join(lines)
+
+
+# ============================================================================
+# Enhanced Git Context Collection
+# ============================================================================
+
+
+def _get_dirty_files(directory: str) -> dict[str, list[str]]:
+    """
+    Get lists of staged, unstaged, and untracked files.
+
+    Args:
+        directory: Directory to check
+
+    Returns:
+        dict: Dictionary with 'staged', 'unstaged', 'untracked' lists
+    """
+    dirty_files = {
+        "staged": [],
+        "unstaged": [],
+        "untracked": [],
+    }
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode != 0:
+            return dirty_files
+
+        # Split on newlines, preserving leading spaces (important for porcelain format)
+        # Only strip the trailing newline, not leading whitespace
+        for line in result.stdout.rstrip("\n").split("\n"):
+            if not line or len(line) < 3:
+                continue
+
+            staged_status = line[0]
+            unstaged_status = line[1]
+            filename = line[3:].strip()
+
+            # Handle renamed files (old -> new format)
+            if " -> " in filename:
+                filename = filename.split(" -> ")[-1]
+
+            # Staged changes (not untracked)
+            if staged_status != " " and staged_status != "?":
+                dirty_files["staged"].append(filename)
+
+            # Unstaged changes
+            if unstaged_status != " " and unstaged_status != "?":
+                dirty_files["unstaged"].append(filename)
+
+            # Untracked files
+            if staged_status == "?" and unstaged_status == "?":
+                dirty_files["untracked"].append(filename)
+
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+    return dirty_files
+
+
+def _get_ahead_behind_count(directory: str) -> tuple[int, int, Optional[str]]:
+    """
+    Get ahead/behind count relative to remote tracking branch.
+
+    Args:
+        directory: Git repository directory
+
+    Returns:
+        tuple: (ahead_count, behind_count, remote_branch)
+    """
+    ahead = 0
+    behind = 0
+    remote_branch = None
+
+    try:
+        # Get the upstream tracking branch
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode != 0:
+            # No upstream tracking branch
+            return ahead, behind, None
+
+        remote_branch = result.stdout.strip()
+
+        # Get ahead/behind counts
+        result = subprocess.run(
+            ["git", "rev-list", "--left-right", "--count", f"HEAD...{remote_branch}"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            parts = result.stdout.strip().split()
+            if len(parts) == 2:
+                ahead = int(parts[0])
+                behind = int(parts[1])
+
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+    return ahead, behind, remote_branch
+
+
+def _get_stash_count(directory: str) -> int:
+    """
+    Get the number of stashes.
+
+    Args:
+        directory: Git repository directory
+
+    Returns:
+        int: Number of stashes
+    """
+    try:
+        result = subprocess.run(
+            ["git", "stash", "list"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            return len(result.stdout.strip().split("\n"))
+
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+    return 0
+
+
+def _get_recent_commits(directory: str, max_commits: int = 5) -> list[dict[str, str]]:
+    """
+    Get recent commit history.
+
+    Args:
+        directory: Git repository directory
+        max_commits: Maximum number of commits to return
+
+    Returns:
+        list: List of dicts with 'hash' and 'message' keys
+    """
+    commits = []
+
+    try:
+        result = subprocess.run(
+            ["git", "log", f"-{max_commits}", "--oneline", "--no-decorate"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split(" ", 1)
+                if len(parts) >= 2:
+                    commits.append({
+                        "hash": parts[0],
+                        "message": parts[1],
+                    })
+                elif len(parts) == 1:
+                    commits.append({
+                        "hash": parts[0],
+                        "message": "",
+                    })
+
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+    return commits
+
+
+def get_git_context_enhanced(
+    directory: Optional[str] = None,
+    max_commits: int = 5
+) -> dict[str, Any]:
+    """
+    Collect enhanced git repository information.
+
+    Extends the basic git context with additional details:
+    - List of dirty files by status (staged, unstaged, untracked)
+    - Ahead/behind counts relative to remote
+    - Stash count
+    - Recent commit history
+    - Remote tracking branch info
+
+    Args:
+        directory: Directory to check (default: current working directory)
+        max_commits: Maximum number of recent commits to include
+
+    Returns:
+        dict: Enhanced git context with keys:
+            - is_git_repo: Whether directory is in a git repository
+            - branch: Current branch name
+            - commit_hash: Short commit hash
+            - is_clean: Whether working directory is clean
+            - has_staged: Whether there are staged changes
+            - has_unstaged: Whether there are unstaged changes
+            - has_untracked: Whether there are untracked files
+            - dirty_files: Dict with 'staged', 'unstaged', 'untracked' file lists
+            - ahead_count: Commits ahead of remote
+            - behind_count: Commits behind remote
+            - stash_count: Number of stashes
+            - recent_commits: List of recent commits (hash, message)
+            - remote_branch: Remote tracking branch name
+            - error: Error message if collection failed
+
+    Example:
+        >>> context = get_git_context_enhanced()
+        >>> print(context['dirty_files'])
+        {'staged': ['file.py'], 'unstaged': [], 'untracked': ['new.txt']}
+    """
+    # Start with basic git context
+    basic_context = get_git_context(directory)
+
+    # Initialize enhanced fields
+    context = {
+        **basic_context,
+        "dirty_files": {"staged": [], "unstaged": [], "untracked": []},
+        "ahead_count": 0,
+        "behind_count": 0,
+        "stash_count": 0,
+        "recent_commits": [],
+        "remote_branch": None,
+    }
+
+    # If not a git repo or there's an error, return early
+    if not context["is_git_repo"] or context.get("error"):
+        return context
+
+    # Determine directory
+    if directory is None:
+        directory = os.getcwd()
+
+    # Get detailed dirty files
+    context["dirty_files"] = _get_dirty_files(directory)
+
+    # Get ahead/behind counts
+    ahead, behind, remote = _get_ahead_behind_count(directory)
+    context["ahead_count"] = ahead
+    context["behind_count"] = behind
+    context["remote_branch"] = remote
+
+    # Get stash count
+    context["stash_count"] = _get_stash_count(directory)
+
+    # Get recent commits
+    context["recent_commits"] = _get_recent_commits(directory, max_commits)
+
+    return context
+
+
+def format_git_context_enhanced(context: dict[str, Any]) -> str:
+    """
+    Format enhanced git context as human-readable string.
+
+    Args:
+        context: Context dictionary from get_git_context_enhanced()
+
+    Returns:
+        str: Formatted enhanced git context string
+
+    Example:
+        >>> context = get_git_context_enhanced()
+        >>> print(format_git_context_enhanced(context))
+        Git Repository: Yes
+        Branch: main (abc1234)
+        Status: clean
+        Recent Commits:
+          - abc1234: Add feature X
+    """
+    lines = []
+
+    if context.get("error"):
+        lines.append(f"Git Error: {context['error']}")
+        return "\n".join(lines)
+
+    if not context.get("is_git_repo"):
+        lines.append("Git Repository: No")
+        return "\n".join(lines)
+
+    lines.append("Git Repository: Yes")
+
+    # Branch and commit
+    branch = context.get("branch", "unknown")
+    if context.get("commit_hash"):
+        branch = f"{branch} ({context['commit_hash']})"
+    lines.append(f"Branch: {branch}")
+
+    # Remote tracking
+    if context.get("remote_branch"):
+        ahead = context.get("ahead_count", 0)
+        behind = context.get("behind_count", 0)
+        if ahead or behind:
+            tracking_info = f"↑{ahead} ↓{behind}"
+            lines.append(f"Tracking: {context['remote_branch']} [{tracking_info}]")
+
+    # Status
+    if context.get("is_clean"):
+        lines.append("Status: clean")
+    else:
+        status_parts = []
+        dirty_files = context.get("dirty_files", {})
+
+        staged = dirty_files.get("staged", [])
+        if staged:
+            status_parts.append(f"{len(staged)} staged")
+
+        unstaged = dirty_files.get("unstaged", [])
+        if unstaged:
+            status_parts.append(f"{len(unstaged)} unstaged")
+
+        untracked = dirty_files.get("untracked", [])
+        if untracked:
+            status_parts.append(f"{len(untracked)} untracked")
+
+        if status_parts:
+            lines.append(f"Status: {', '.join(status_parts)}")
+        else:
+            lines.append("Status: dirty")
+
+    # Stash count
+    stash_count = context.get("stash_count", 0)
+    if stash_count > 0:
+        lines.append(f"Stashes: {stash_count}")
+
+    # Recent commits (show up to 3)
+    recent_commits = context.get("recent_commits", [])
+    if recent_commits:
+        lines.append("Recent Commits:")
+        for commit in recent_commits[:3]:
+            hash_val = commit.get("hash", "?")
+            msg = commit.get("message", "")
+            # Truncate long messages
+            if len(msg) > 50:
+                msg = msg[:47] + "..."
+            lines.append(f"  - {hash_val}: {msg}")
+
+    return "\n".join(lines)

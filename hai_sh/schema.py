@@ -232,6 +232,78 @@ class ContextConfig(BaseModel):
         default=False,
         description="Include hidden files (starting with .) in listing",
     )
+    # Enhanced context settings
+    include_session_memory: bool = Field(
+        default=True,
+        description="Include recent session interactions in context",
+    )
+    include_directory_memory: bool = Field(
+        default=True,
+        description="Include project-specific patterns in context",
+    )
+    max_context_tokens: int = Field(
+        default=4000,
+        description="Maximum tokens to use for context (affects LLM prompt size)",
+        ge=500,
+        le=16000,
+    )
+    context_relevance_threshold: float = Field(
+        default=0.3,
+        description="Threshold for including context based on relevance (0.0-1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+
+
+class MemoryConfig(BaseModel):
+    """Memory system configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Master switch for memory system",
+    )
+    session_enabled: bool = Field(
+        default=True,
+        description="Enable session memory (in-memory interaction tracking)",
+    )
+    session_max_interactions: int = Field(
+        default=20,
+        description="Maximum interactions to store in session memory",
+        ge=1,
+        le=100,
+    )
+    directory_enabled: bool = Field(
+        default=True,
+        description="Enable directory memory (project-specific patterns)",
+    )
+    directory_max_patterns: int = Field(
+        default=100,
+        description="Maximum command patterns to store per directory",
+        ge=10,
+        le=500,
+    )
+    persistent_enabled: bool = Field(
+        default=True,
+        description="Enable persistent preferences (user-wide patterns)",
+    )
+    persistent_max_patterns: int = Field(
+        default=500,
+        description="Maximum command patterns to store in preferences",
+        ge=50,
+        le=2000,
+    )
+    cleanup_interval_hours: int = Field(
+        default=24,
+        description="How often to cleanup old memory entries (hours)",
+        ge=1,
+        le=168,
+    )
+    max_total_size_mb: int = Field(
+        default=10,
+        description="Maximum total memory storage size (MB)",
+        ge=1,
+        le=100,
+    )
 
 
 class OutputConfig(BaseModel):
@@ -315,6 +387,10 @@ class HaiConfig(BaseModel):
     execution: ExecutionConfig = Field(
         default_factory=ExecutionConfig,
         description="Command execution settings",
+    )
+    memory: MemoryConfig = Field(
+        default_factory=MemoryConfig,
+        description="Memory system settings",
     )
 
     @field_validator("provider")

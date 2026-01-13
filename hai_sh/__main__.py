@@ -18,8 +18,9 @@ from hai_sh.config import (
     get_available_provider,
 )
 from hai_sh.context import get_cwd_context, get_git_context, get_env_context, get_file_listing_context
-from hai_sh.prompt import build_system_prompt, generate_with_retry
+from hai_sh.prompt import build_system_prompt, generate_with_retry, collect_context
 from hai_sh.executor import execute_command
+from hai_sh.memory import MemoryManager
 from hai_sh.output import should_use_color
 from hai_sh.schema import validate_config_dict
 
@@ -426,8 +427,17 @@ def main():
             handle_config_error(str(e))
             return 1
 
-        # Gather context in parallel for faster startup
-        context = gather_context_parallel(user_query=user_query, config=config)
+        # Initialize memory manager
+        memory_manager = MemoryManager(config)
+        memory_manager.load_all()
+
+        # Collect context using smart context injection
+        # This includes memory, shell history, enhanced git, and relevance filtering
+        context = collect_context(
+            config=config,
+            query=user_query,
+            memory_manager=memory_manager
+        )
 
         # Build system prompt with context
         system_prompt = build_system_prompt(context)
@@ -562,6 +572,15 @@ def main():
                 if result.stderr:
                     print(f"{RED}Error: {result.stderr}{RESET}")
 
+            # Update memory with interaction
+            memory_manager.update_memory(
+                query=user_query,
+                command=command,
+                result=result.stdout if result.success else result.stderr,
+                success=result.success
+            )
+            memory_manager.save_all()
+
             # Show explanation based on config
             if show_explanation_mode == 'expanded':
                 print(f"\n{BOLD}Explanation:{RESET} {explanation}")
@@ -595,6 +614,15 @@ def main():
                 print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
                 if result.stderr:
                     print(f"{RED}Error: {result.stderr}{RESET}")
+
+            # Update memory with interaction
+            memory_manager.update_memory(
+                query=user_query,
+                command=command,
+                result=result.stdout if result.success else result.stderr,
+                success=result.success
+            )
+            memory_manager.save_all()
 
             return 0 if result.success else result.exit_code
 

@@ -3,10 +3,20 @@ System prompt and response formatting for hai-sh.
 
 This module provides the system prompt template that instructs LLMs
 to generate bash commands in a structured JSON format.
+
+Also includes smart context injection with:
+- Multi-source context collection (cwd, git, env, files, memory, history)
+- Relevance-based filtering
+- Token budgeting
 """
 
 import json
-from typing import Any, Optional
+import os
+import re
+from typing import Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from hai_sh.memory import MemoryManager
 
 
 # System prompt template
@@ -167,41 +177,66 @@ def _format_context(context: dict[str, Any]) -> str:
         parts.append(f"Current directory: {context['cwd']}")
 
     # Git context
-    if "git" in context and context["git"].get("is_repo"):
+    if "git" in context:
         git_info = context["git"]
-        git_parts = [f"Git branch: {git_info.get('branch', 'unknown')}"]
+        # Check for pre-formatted git context from collect_context
+        if "formatted" in git_info:
+            parts.append(git_info["formatted"])
+        elif git_info.get("is_repo"):
+            git_parts = [f"Git branch: {git_info.get('branch', 'unknown')}"]
 
-        if git_info.get("has_changes"):
-            git_parts.append("Uncommitted changes present")
+            if git_info.get("has_changes"):
+                git_parts.append("Uncommitted changes present")
 
-        if git_info.get("staged_files"):
-            git_parts.append(f"Staged files: {len(git_info['staged_files'])}")
+            if git_info.get("staged_files"):
+                git_parts.append(f"Staged files: {len(git_info['staged_files'])}")
 
-        if git_info.get("unstaged_files"):
-            git_parts.append(f"Unstaged files: {len(git_info['unstaged_files'])}")
+            if git_info.get("unstaged_files"):
+                git_parts.append(f"Unstaged files: {len(git_info['unstaged_files'])}")
 
-        parts.append(", ".join(git_parts))
+            parts.append(", ".join(git_parts))
 
     # Environment context
     if "env" in context:
         env_info = context["env"]
-        env_parts = []
+        # Check for pre-formatted env context
+        if "formatted" in env_info:
+            parts.append(env_info["formatted"])
+        else:
+            env_parts = []
 
-        if "user" in env_info:
-            env_parts.append(f"User: {env_info['user']}")
+            if "user" in env_info:
+                env_parts.append(f"User: {env_info['user']}")
 
-        if "shell" in env_info:
-            env_parts.append(f"Shell: {env_info['shell']}")
+            if "shell" in env_info:
+                env_parts.append(f"Shell: {env_info['shell']}")
 
-        if env_parts:
-            parts.append(", ".join(env_parts))
+            if env_parts:
+                parts.append(", ".join(env_parts))
 
-    # File listing context (NEW)
+    # File listing context
     if "files" in context:
-        from hai_sh.context import format_file_listing_context
-        file_listing = format_file_listing_context(context["files"])
-        if file_listing:
-            parts.append(file_listing)
+        files_info = context["files"]
+        # Check for pre-formatted files context
+        if isinstance(files_info, dict) and "formatted" in files_info:
+            parts.append(files_info["formatted"])
+        else:
+            from hai_sh.context import format_file_listing_context
+            file_listing = format_file_listing_context(files_info)
+            if file_listing:
+                parts.append(file_listing)
+
+    # Shell history context (NEW)
+    if "shell_history" in context:
+        parts.append(context["shell_history"])
+
+    # Session memory context (NEW)
+    if "memory_session" in context:
+        parts.append(context["memory_session"])
+
+    # Directory memory context (NEW)
+    if "memory_dir" in context:
+        parts.append(context["memory_dir"])
 
     return "\n".join(parts) if parts else "No specific context provided."
 
@@ -767,3 +802,326 @@ def validate_response_fields(response: dict[str, Any]) -> tuple[bool, Optional[s
         return False, "Confidence must be between 0 and 100"
 
     return True, None
+
+
+# ============================================================================
+# Smart Context Injection
+# ============================================================================
+
+
+# Context priority order (higher priority = more likely to be kept under budget)
+CONTEXT_PRIORITY = {
+    "cwd": 10,           # Always included
+    "git": 9,            # Very relevant for development
+    "git_enhanced": 9,   # Enhanced git context
+    "shell_history": 7,  # Recent commands
+    "env": 6,            # Environment info
+    "files": 5,          # File listing
+    "memory_session": 4, # Session memory
+    "memory_dir": 3,     # Directory memory
+    "memory_prefs": 2,   # User preferences
+}
+
+
+def _estimate_tokens(text: str) -> int:
+    """
+    Estimate number of tokens in a string.
+
+    Uses a simple heuristic: ~4 characters per token on average.
+    This is a rough estimate suitable for context budgeting.
+
+    Args:
+        text: Text to estimate tokens for
+
+    Returns:
+        int: Estimated number of tokens
+    """
+    if not text:
+        return 0
+    # Rough estimate: ~4 characters per token
+    return max(1, len(text) // 4)
+
+
+def _calculate_relevance(context: str, query: str) -> float:
+    """
+    Calculate relevance score between context and query.
+
+    Uses simple word overlap and domain keyword matching.
+
+    Args:
+        context: Context text
+        query: User's query
+
+    Returns:
+        float: Relevance score between 0.0 and 1.0
+    """
+    if not context or not query:
+        return 0.0
+
+    # Normalize to lowercase
+    context_lower = context.lower()
+    query_lower = query.lower()
+
+    # Extract words (alphanumeric sequences)
+    context_words = set(re.findall(r'\b\w+\b', context_lower))
+    query_words = set(re.findall(r'\b\w+\b', query_lower))
+
+    if not query_words:
+        return 0.0
+
+    # Calculate word overlap
+    overlap = len(context_words & query_words)
+    if overlap == 0:
+        return 0.0
+
+    # Base relevance from overlap
+    relevance = overlap / len(query_words)
+
+    # Boost for domain-specific keywords
+    domain_keywords = {
+        "git", "branch", "commit", "status", "diff", "push", "pull",
+        "file", "directory", "folder", "path",
+        "python", "node", "npm", "pip", "uv",
+        "test", "build", "run", "command",
+    }
+
+    domain_overlap = len(context_words & domain_keywords & query_words)
+    if domain_overlap > 0:
+        relevance = min(1.0, relevance + 0.1 * domain_overlap)
+
+    return min(1.0, relevance)
+
+
+def _budget_context(
+    context_parts: dict[str, str],
+    max_tokens: int,
+) -> dict[str, str]:
+    """
+    Budget context parts to fit within token limit.
+
+    Prioritizes higher-priority context sources and truncates
+    or removes lower-priority ones as needed.
+
+    Args:
+        context_parts: Dictionary of context key -> content
+        max_tokens: Maximum tokens allowed
+
+    Returns:
+        dict: Budgeted context parts
+    """
+    if not context_parts:
+        return {}
+
+    if max_tokens <= 0:
+        # Return only essential CWD if present
+        if "cwd" in context_parts:
+            cwd_content = context_parts["cwd"]
+            if _estimate_tokens(cwd_content) <= 10:
+                return {"cwd": cwd_content}
+        return {}
+
+    # Sort by priority (highest first)
+    sorted_parts = sorted(
+        context_parts.items(),
+        key=lambda x: CONTEXT_PRIORITY.get(x[0], 0),
+        reverse=True
+    )
+
+    result = {}
+    remaining_tokens = max_tokens
+
+    for key, content in sorted_parts:
+        content_tokens = _estimate_tokens(content)
+
+        if content_tokens <= remaining_tokens:
+            # Fits entirely
+            result[key] = content
+            remaining_tokens -= content_tokens
+        elif remaining_tokens > 20:
+            # Truncate to fit (keep first part)
+            # Estimate chars from remaining tokens
+            max_chars = remaining_tokens * 4
+            truncated = content[:max_chars]
+            if len(truncated) < len(content):
+                truncated = truncated.rsplit('\n', 1)[0] + "\n..."
+            result[key] = truncated
+            remaining_tokens = 0
+        # else: skip this part
+
+        if remaining_tokens <= 0:
+            break
+
+    return result
+
+
+def collect_context(
+    config: Optional[dict[str, Any]] = None,
+    query: str = "",
+    memory_manager: Optional["MemoryManager"] = None,
+) -> dict[str, Any]:
+    """
+    Collect context from all enabled sources with relevance filtering and budgeting.
+
+    This is the main entry point for smart context injection. It:
+    1. Collects context from enabled sources (cwd, git, env, files, memory, history)
+    2. Filters by relevance threshold
+    3. Budgets to fit within token limit
+
+    Args:
+        config: Configuration dictionary with context settings
+        query: User's query for relevance calculation
+        memory_manager: Optional MemoryManager instance for memory context
+
+    Returns:
+        dict: Collected and budgeted context ready for prompt building
+    """
+    # Default configuration
+    if config is None:
+        config = {}
+
+    context_config = config.get("context", {})
+
+    # Extract settings with defaults
+    include_history = context_config.get("include_history", True)
+    history_length = context_config.get("history_length", 10)
+    include_env = context_config.get("include_env_vars", True)
+    include_git = context_config.get("include_git_state", True)
+    include_files = context_config.get("include_file_listing", False)
+    include_session_memory = context_config.get("include_session_memory", False)
+    include_dir_memory = context_config.get("include_directory_memory", False)
+    max_tokens = context_config.get("max_context_tokens", 4000)
+    relevance_threshold = context_config.get("context_relevance_threshold", 0.3)
+
+    # File listing settings
+    file_max_files = context_config.get("file_listing_max_files", 20)
+    file_max_depth = context_config.get("file_listing_max_depth", 1)
+    file_show_hidden = context_config.get("file_listing_show_hidden", False)
+
+    # Collect raw context parts
+    context_parts: dict[str, str] = {}
+
+    # Always include CWD
+    try:
+        cwd = os.getcwd()
+        context_parts["cwd"] = f"Current directory: {cwd}"
+    except OSError:
+        context_parts["cwd"] = "Current directory: unknown"
+
+    # Git context
+    if include_git:
+        try:
+            from hai_sh.context import get_git_context_enhanced, format_git_context_enhanced
+            git_context = get_git_context_enhanced()
+            if git_context.get("is_git_repo"):
+                formatted_git = format_git_context_enhanced(git_context)
+                context_parts["git"] = formatted_git
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    # Environment context
+    if include_env:
+        try:
+            from hai_sh.context import get_env_context, format_env_context
+            env_context = get_env_context()
+            formatted_env = format_env_context(env_context)
+            if formatted_env:
+                context_parts["env"] = formatted_env
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    # File listing
+    if include_files:
+        try:
+            from hai_sh.context import get_file_listing_context, format_file_listing_context
+            files_context = get_file_listing_context(
+                max_files=file_max_files,
+                max_depth=file_max_depth,
+                show_hidden=file_show_hidden,
+            )
+            formatted_files = format_file_listing_context(files_context)
+            if formatted_files:
+                context_parts["files"] = formatted_files
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    # Shell history
+    if include_history:
+        try:
+            from hai_sh.context import get_shell_history, format_shell_history
+            history_context = get_shell_history(length=history_length)
+            formatted_history = format_shell_history(history_context)
+            if formatted_history:
+                context_parts["shell_history"] = formatted_history
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    # Memory context
+    memory_config = config.get("memory", {})
+    memory_enabled = memory_config.get("enabled", True)
+
+    if memory_enabled and memory_manager:
+        # Session memory
+        if include_session_memory:
+            session_ctx = memory_manager.session.format_for_context()
+            if session_ctx:
+                context_parts["memory_session"] = session_ctx
+
+        # Directory memory
+        if include_dir_memory:
+            dir_ctx = memory_manager.directory.format_for_context()
+            if dir_ctx:
+                context_parts["memory_dir"] = dir_ctx
+
+    # Apply relevance filtering (skip cwd - always included)
+    if relevance_threshold > 0 and query:
+        filtered_parts = {"cwd": context_parts.get("cwd", "")}
+        for key, content in context_parts.items():
+            if key == "cwd":
+                continue
+            relevance = _calculate_relevance(content, query)
+            if relevance >= relevance_threshold:
+                filtered_parts[key] = content
+        context_parts = filtered_parts
+
+    # Budget context
+    budgeted_parts = _budget_context(context_parts, max_tokens)
+
+    # Convert to the format expected by build_system_prompt
+    result: dict[str, Any] = {}
+
+    if "cwd" in budgeted_parts:
+        # Extract just the path
+        cwd_line = budgeted_parts["cwd"]
+        if ":" in cwd_line:
+            result["cwd"] = cwd_line.split(":", 1)[1].strip()
+        else:
+            result["cwd"] = cwd_line
+
+    if "git" in budgeted_parts:
+        # Store raw formatted git context
+        result["git"] = {"is_repo": True, "formatted": budgeted_parts["git"]}
+
+    if "env" in budgeted_parts:
+        result["env"] = {"formatted": budgeted_parts["env"]}
+
+    if "files" in budgeted_parts:
+        result["files"] = {"formatted": budgeted_parts["files"]}
+
+    if "shell_history" in budgeted_parts:
+        result["shell_history"] = budgeted_parts["shell_history"]
+
+    if "memory_session" in budgeted_parts:
+        result["memory_session"] = budgeted_parts["memory_session"]
+
+    if "memory_dir" in budgeted_parts:
+        result["memory_dir"] = budgeted_parts["memory_dir"]
+
+    return result
