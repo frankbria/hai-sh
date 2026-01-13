@@ -50,11 +50,27 @@ DEFAULT_CONFIG = {
         "file_listing_max_files": 20,
         "file_listing_max_depth": 1,
         "file_listing_show_hidden": False,
+        # Enhanced context settings
+        "include_session_memory": True,
+        "include_directory_memory": True,
+        "max_context_tokens": 4000,
+        "context_relevance_threshold": 0.3,
     },
     "output": {
         "show_conversation": True,
         "show_reasoning": True,
         "use_colors": True,
+    },
+    "memory": {
+        "enabled": True,
+        "session_enabled": True,
+        "session_max_interactions": 20,
+        "directory_enabled": True,
+        "directory_max_patterns": 100,
+        "persistent_enabled": True,
+        "persistent_max_patterns": 500,
+        "cleanup_interval_hours": 24,
+        "max_total_size_mb": 10,
     },
 }
 
