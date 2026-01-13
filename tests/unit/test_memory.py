@@ -476,7 +476,7 @@ class TestMemoryManager:
         manager = MemoryManager(config)
 
         # Should still work but return empty contexts
-        context = manager.collect_memory_context("test query")
+        context = manager.collect_memory_context()
         assert isinstance(context, dict)
 
     @pytest.mark.unit
@@ -493,7 +493,7 @@ class TestMemoryManager:
         manager.directory.add_pattern("pytest")
         manager.preferences.record_command("git status", True)
 
-        context = manager.collect_memory_context("run tests")
+        context = manager.collect_memory_context()
 
         assert "session" in context or "interactions" in str(context)
 

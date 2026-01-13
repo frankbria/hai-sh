@@ -10,6 +10,7 @@ environment to provide to the LLM, including:
 """
 
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -1061,7 +1062,7 @@ def _is_sensitive_command(command: str) -> bool:
     """
     command_upper = command.upper()
 
-    # Patterns indicating sensitive data
+    # Patterns indicating sensitive data (case-insensitive check via command_upper)
     sensitive_patterns = [
         # Credentials
         "PASSWORD", "PASSWD", "PWD=",
@@ -1072,7 +1073,6 @@ def _is_sensitive_command(command: str) -> bool:
         # Auth headers
         "AUTHORIZATION:", "BEARER ",
         # Database
-        "-P", "-PPASSWORD",  # MySQL password flag
         "MYSQL_PWD",
         # SSH
         "SSH-ADD", "SSH -I",
@@ -1086,9 +1086,10 @@ def _is_sensitive_command(command: str) -> bool:
         if pattern in command_upper:
             return True
 
-    # Check for password flags in common commands
-    # e.g., mysql -u root -ppassword
-    if "-P" in command and ("MYSQL" in command_upper or "PSQL" in command_upper):
+    # Check for MySQL password flag: -p<password> (case-sensitive, lowercase -p)
+    # MySQL uses -p for password (e.g., mysql -u root -pMyPassword)
+    # Note: -P is for port number, not password
+    if re.search(r'-p\S+', command) and "mysql" in command.lower():
         return True
 
     return False

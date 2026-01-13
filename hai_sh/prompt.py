@@ -182,7 +182,7 @@ def _format_context(context: dict[str, Any]) -> str:
         # Check for pre-formatted git context from collect_context
         if isinstance(git_info, dict) and "formatted" in git_info:
             parts.append(git_info["formatted"])
-        elif git_info.get("is_repo"):
+        elif isinstance(git_info, dict) and git_info.get("is_repo"):
             git_parts = [f"Git branch: {git_info.get('branch', 'unknown')}"]
 
             if git_info.get("has_changes"):
@@ -200,9 +200,9 @@ def _format_context(context: dict[str, Any]) -> str:
     if "env" in context:
         env_info = context["env"]
         # Check for pre-formatted env context
-        if "formatted" in env_info:
+        if isinstance(env_info, dict) and "formatted" in env_info:
             parts.append(env_info["formatted"])
-        else:
+        elif isinstance(env_info, dict):
             env_parts = []
 
             if "user" in env_info:

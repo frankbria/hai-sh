@@ -76,6 +76,8 @@ class SessionMemory:
         Returns:
             list: List of recent interaction dictionaries
         """
+        if count <= 0:
+            return []
         return self.interactions[-count:]
 
     def clear(self) -> None:
@@ -91,21 +93,28 @@ class SessionMemory:
         """
         return {
             "interactions": self.interactions,
+            "max_interactions": self.max_interactions,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SessionMemory":
+    def from_dict(cls, data: dict[str, Any], max_interactions: int = 20) -> "SessionMemory":
         """
         Deserialize session memory from dictionary.
 
         Args:
             data: Dictionary containing session data
+            max_interactions: Maximum interactions to store (default: 20)
 
         Returns:
             SessionMemory: New instance with loaded data
         """
-        memory = cls()
-        memory.interactions = data.get("interactions", [])
+        stored_max = data.get("max_interactions", max_interactions)
+        memory = cls(max_interactions=stored_max)
+        interactions = data.get("interactions", [])
+        # Cap loaded history to the limit
+        if len(interactions) > memory.max_interactions:
+            interactions = interactions[-memory.max_interactions:]
+        memory.interactions = interactions
         return memory
 
     def format_for_context(self) -> str:
@@ -174,9 +183,16 @@ class DirectoryMemory:
             with open(context_file, "r") as f:
                 data = json.load(f)
 
+            # Guard against non-dict JSON roots
+            if not isinstance(data, dict):
+                return
+
             self.project_name = data.get("project_name")
-            self.patterns = data.get("patterns", [])
-            self.preferences = data.get("preferences", {})
+            # Validate/normalize field types
+            patterns = data.get("patterns", [])
+            self.patterns = patterns if isinstance(patterns, list) else []
+            prefs = data.get("preferences", {})
+            self.preferences = prefs if isinstance(prefs, dict) else {}
             self.last_updated = data.get("last_updated")
 
         except (json.JSONDecodeError, OSError):
@@ -191,7 +207,11 @@ class DirectoryMemory:
             directory: Directory to save to
         """
         hai_dir = directory / ".hai"
-        hai_dir.mkdir(exist_ok=True)
+        try:
+            hai_dir.mkdir(exist_ok=True)
+        except OSError:
+            # Can't create directory (permissions or .hai is a file), skip saving
+            return
 
         context_file = hai_dir / "context.json"
 
@@ -223,8 +243,9 @@ class DirectoryMemory:
             self.patterns.append(command)
 
         # Enforce size limit (remove oldest)
+        # Handle max_patterns=0 edge case: -0 slice returns full list
         if len(self.patterns) > self.max_patterns:
-            self.patterns = self.patterns[-self.max_patterns:]
+            self.patterns = self.patterns[-self.max_patterns:] if self.max_patterns > 0 else []
 
     def get_patterns(self) -> list[str]:
         """
@@ -335,8 +356,7 @@ class PersistentPreferences:
 
     def _get_preferences_path(self) -> Path:
         """Get path to preferences file."""
-        home = os.environ.get("HOME", "")
-        return Path(home) / ".hai" / "preferences.json"
+        return Path.home() / ".hai" / "preferences.json"
 
     def load(self) -> None:
         """Load preferences from ~/.hai/preferences.json."""
@@ -549,12 +569,9 @@ class MemoryManager:
         if self._working_dir:
             self.directory.save(self._working_dir)
 
-    def collect_memory_context(self, query: str) -> dict[str, Any]:
+    def collect_memory_context(self) -> dict[str, Any]:
         """
-        Collect relevant memory context for a query.
-
-        Args:
-            query: User's query
+        Collect relevant memory context.
 
         Returns:
             dict: Memory context from all tiers
