@@ -175,7 +175,13 @@ class OpenAIProvider(BaseLLMProvider):
             response = self.client.chat.completions.create(**api_params)
 
             # Extract and return response
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            
+            # Handle None or empty content
+            if content is None:
+                raise RuntimeError("OpenAI returned None content in response")
+            
+            return content.strip()
 
         except AuthenticationError as e:
             raise RuntimeError(f"OpenAI authentication failed: {e}")
