@@ -963,7 +963,6 @@ def format_file_listing_context(context: dict[str, Any]) -> str:
                 # Add trailing slash for directories
                 lines.append(f"  {name}/")
             else:
-            else:
                 size = file_info.get('size')
                 if isinstance(size, int):
                     size_str = _format_file_size(size)
