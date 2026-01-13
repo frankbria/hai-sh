@@ -899,7 +899,10 @@ def get_file_listing_context(
             filtered_files = all_files[:max_files]
 
         context["files"] = filtered_files
-        context["truncated"] = len(all_files) > max_files
+        if query:
+            context["truncated"] = len(_filter_files_by_relevance(all_files, query, len(all_files))) > max_files
+        else:
+            context["truncated"] = len(all_files) > max_files
 
     except OSError as e:
         context["error"] = f"Error accessing directory: {e}"
