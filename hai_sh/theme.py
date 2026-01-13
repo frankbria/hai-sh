@@ -88,7 +88,8 @@ def create_confidence_bar(
     Returns:
         String representation of the confidence bar
     """
-    filled = int((score / 100) * width)
+    clamped_score = min(100, max(0, score))
+    filled = int((clamped_score / 100) * width)
     empty = width - filled
     return filled_char * filled + empty_char * empty
 
