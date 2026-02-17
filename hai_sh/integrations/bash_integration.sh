@@ -32,6 +32,19 @@ if [[ -z "$HAI_TESTING" ]] && ! command -v hai &> /dev/null; then
     return 1 2>/dev/null || exit 1
 fi
 
+# Detect gum availability (cached for session)
+_HAI_HAS_GUM=""
+_hai_has_gum() {
+    if [[ -z "$_HAI_HAS_GUM" ]]; then
+        if command -v gum &> /dev/null; then
+            _HAI_HAS_GUM="1"
+        else
+            _HAI_HAS_GUM="0"
+        fi
+    fi
+    [[ "$_HAI_HAS_GUM" == "1" ]]
+}
+
 # Helper function to parse JSON response from hai --suggest-only
 _hai_parse_json() {
     local json="$1"
@@ -136,31 +149,48 @@ _hai_display_dual_layer() {
         use_colors="false"
     fi
 
-    # ANSI color codes
-    local cyan="\033[96m"
-    local green="\033[92m"
-    local bold="\033[1m"
-    local reset="\033[0m"
+    echo ""
 
-    if [[ "$use_colors" != "true" ]]; then
-        cyan=""
-        green=""
-        bold=""
-        reset=""
+    # Display conversation layer with gum styling if available
+    if _hai_has_gum && [[ "$use_colors" == "true" ]]; then
+        gum style --border rounded --border-foreground 39 --padding "0 1" \
+            --foreground 39 -- "$conversation"
+        echo ""
+        echo -e "\033[1mConfidence:\033[0m $(_hai_format_confidence "$confidence" "$use_colors")"
+    else
+        # ANSI fallback
+        local cyan="\033[96m"
+        local bold="\033[1m"
+        local reset="\033[0m"
+
+        if [[ "$use_colors" != "true" ]]; then
+            cyan=""
+            bold=""
+            reset=""
+        fi
+
+        echo -e "${cyan}━━━ Conversation ━━━${reset}"
+        echo "$conversation"
+        echo ""
+        echo -e "${bold}Confidence:${reset} $(_hai_format_confidence "$confidence" "$use_colors")"
     fi
 
-    echo ""
-    echo -e "${cyan}━━━ Conversation ━━━${reset}"
-    echo "$conversation"
-    echo ""
-    echo -e "${bold}Confidence:${reset} $(_hai_format_confidence "$confidence" "$use_colors")"
     echo ""
 
     # Only show execution layer if there's a command (not question mode)
     if [[ -n "$command" ]]; then
-        echo "═══════════════════"
-        echo -e "${cyan}━━━ Execution ━━━${reset}"
-        echo -e "${green}\$ ${command}${reset}"
+        if _hai_has_gum && [[ "$use_colors" == "true" ]]; then
+            gum style --foreground 82 --bold -- "$ ${command}"
+        else
+            local green="\033[92m"
+            local reset="\033[0m"
+            if [[ "$use_colors" != "true" ]]; then
+                green=""
+                reset=""
+            fi
+            echo "═══════════════════"
+            echo -e "${green}\$ ${command}${reset}"
+        fi
         echo ""
     fi
 }
@@ -197,14 +227,21 @@ _hai_trigger() {
     READLINE_LINE=""
     READLINE_POINT=0
 
-    # Show processing message for user feedback
-    echo ""
-    echo "🤖 hai: Processing '$query'..."
-    echo ""
-
-    # Call hai with --suggest-only to get JSON response
+    # Call hai with --suggest-only, showing spinner if gum is available
     local json_response
-    if ! json_response=$(hai --suggest-only "$query" 2>&1); then
+    echo ""
+    if _hai_has_gum; then
+        json_response=$(gum spin --spinner dot --title "hai is thinking..." \
+            -- hai --suggest-only "$query" 2>/dev/null)
+        local exit_code=$?
+    else
+        echo "🤖 hai: Processing '$query'..."
+        echo ""
+        json_response=$(hai --suggest-only "$query" 2>&1)
+        local exit_code=$?
+    fi
+
+    if [[ $exit_code -ne 0 ]]; then
         echo ""
         echo "✗ Error calling hai:"
         echo "$json_response"

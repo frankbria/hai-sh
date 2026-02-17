@@ -109,6 +109,7 @@ from hai_sh.privacy import (
     validate_privacy_config,
     warn_privacy_risks,
 )
+from hai_sh import gum as gum
 
 __version__ = "0.1.3"
 __all__ = [

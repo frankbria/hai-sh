@@ -20,6 +20,7 @@ from hai_sh.config import (
 from hai_sh.context import get_cwd_context, get_git_context, get_env_context, get_file_listing_context
 from hai_sh.prompt import build_system_prompt, generate_with_retry, collect_context
 from hai_sh.executor import execute_command
+from hai_sh import gum
 from hai_sh.memory import MemoryManager
 from hai_sh.output import should_use_color
 from hai_sh.schema import validate_config_dict
@@ -178,6 +179,24 @@ def create_parser() -> argparse.ArgumentParser:
         "--app-mode",
         action="store_true",
         help="launch interactive TUI mode"
+    )
+
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="run interactive setup wizard to configure provider and API keys"
+    )
+
+    parser.add_argument(
+        "--history",
+        action="store_true",
+        help="search and re-run commands from hai history"
+    )
+
+    parser.add_argument(
+        "--provider",
+        metavar="NAME",
+        help="switch LLM provider for this invocation (openai, anthropic, ollama)"
     )
 
     parser.add_argument(
@@ -351,29 +370,325 @@ def should_auto_execute(confidence: int, config: Dict[str, Any]) -> bool:
     return confidence >= threshold
 
 
-def get_user_confirmation(command: str) -> bool:
+def get_user_confirmation(command: str) -> tuple:
     """
-    Ask user to confirm command execution.
+    Ask user to confirm, edit, or cancel command execution.
+
+    Uses gum choose for rich interactive selection when available,
+    falls back to text input otherwise.
 
     Args:
         command: The command to execute
 
     Returns:
-        bool: True if user confirms, False otherwise
+        tuple: (action, command) where action is 'execute', 'cancel', or 'execute'
+               with potentially edited command
     """
-    print(f"\n{command}")
-    while True:
-        response = input("\nExecute this command? [y/N/e(dit)]: ").strip().lower()
-        if response in ('y', 'yes'):
-            return True
-        elif response in ('n', 'no', ''):
-            return False
-        elif response in ('e', 'edit'):
-            print("Command editing not implemented in v0.1")
-            print("Copy and paste the command to edit it manually.")
-            return False
+    if gum.has_gum() and gum._is_interactive():
+        choice = gum.choose(
+            ["Execute", "Edit", "Cancel"],
+            header=f"$ {command}",
+        )
+        if choice == "Execute":
+            return ("execute", command)
+        elif choice == "Edit":
+            edited = gum.input_text(
+                placeholder="Edit command...",
+                value=command,
+                prompt_str="$ ",
+            )
+            if edited and edited.strip():
+                return ("execute", edited.strip())
+            return ("cancel", command)
         else:
-            print("Please answer 'y', 'n', or 'e'")
+            return ("cancel", command)
+    else:
+        # Fallback to text input
+        print(f"\n{command}")
+        while True:
+            try:
+                response = input("\nExecute this command? [y/N/e(dit)]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return ("cancel", command)
+            if response in ('y', 'yes'):
+                return ("execute", command)
+            elif response in ('n', 'no', ''):
+                return ("cancel", command)
+            elif response in ('e', 'edit'):
+                edited = gum.input_text(
+                    placeholder="Edit command...",
+                    value=command,
+                    prompt_str="$ ",
+                )
+                if edited and edited.strip():
+                    return ("execute", edited.strip())
+                return ("cancel", command)
+            else:
+                print("Please answer 'y', 'n', or 'e'")
+
+
+def run_setup_wizard() -> int:
+    """
+    Run interactive setup wizard for first-time configuration.
+
+    Uses gum for rich interactive prompts when available, falls back
+    to basic input() otherwise.
+
+    Returns:
+        int: Exit code (0 for success)
+    """
+    print(gum.styled("hai-sh Setup", bold=True, foreground="39"))
+    print()
+
+    # Provider selection
+    provider = gum.choose(
+        ["Ollama (local)", "OpenAI", "Anthropic"],
+        header="Choose your LLM provider:",
+    )
+    if not provider:
+        print("Setup cancelled.")
+        return 0
+
+    # Build config based on selection
+    config_updates = {}
+
+    if provider == "OpenAI":
+        config_updates["provider"] = "openai"
+        api_key = gum.input_text(
+            placeholder="sk-...",
+            password=True,
+            prompt_str="OpenAI API Key: ",
+        )
+        if api_key:
+            config_updates["openai_api_key"] = api_key
+        model = gum.input_text(
+            placeholder="Model name",
+            value="gpt-4o-mini",
+            prompt_str="Model: ",
+        )
+        if model:
+            config_updates["openai_model"] = model
+
+    elif provider == "Anthropic":
+        config_updates["provider"] = "anthropic"
+        api_key = gum.input_text(
+            placeholder="sk-ant-...",
+            password=True,
+            prompt_str="Anthropic API Key: ",
+        )
+        if api_key:
+            config_updates["anthropic_api_key"] = api_key
+        model = gum.input_text(
+            placeholder="Model name",
+            value="claude-sonnet-4-5",
+            prompt_str="Model: ",
+        )
+        if model:
+            config_updates["anthropic_model"] = model
+
+    else:  # Ollama
+        config_updates["provider"] = "ollama"
+        base_url = gum.input_text(
+            placeholder="Ollama URL",
+            value="http://localhost:11434",
+            prompt_str="URL: ",
+        )
+        if base_url:
+            config_updates["ollama_base_url"] = base_url
+        model = gum.input_text(
+            placeholder="Model name",
+            value="llama3.2",
+            prompt_str="Model: ",
+        )
+        if model:
+            config_updates["ollama_model"] = model
+
+    # Write config
+    _write_setup_config(config_updates)
+    print()
+    print(gum.success(f"Configuration saved to ~/.hai/config.yaml"))
+
+    # Offer shell integration
+    print()
+    if gum.confirm("Install shell integration (Ctrl+X Ctrl+H)?"):
+        from hai_sh.install_shell import install_shell_integration
+        install_shell_integration()
+    else:
+        print("Skipped shell integration. Run 'hai-install-shell' later to install.")
+
+    print()
+    print(gum.success("Setup complete! Try: hai show disk usage"))
+    return 0
+
+
+def _write_setup_config(updates: dict) -> None:
+    """Write setup wizard selections to config.yaml."""
+    from hai_sh.init import get_config_path, init_hai_directory
+
+    # Ensure directory exists
+    init_hai_directory()
+
+    config_path = get_config_path()
+
+    provider = updates.get("provider", "ollama")
+
+    lines = [
+        "# hai-sh configuration file",
+        "# Generated by hai --setup",
+        "",
+        f'provider: "{provider}"',
+        "",
+        "providers:",
+        "  openai:",
+    ]
+
+    if updates.get("openai_api_key"):
+        lines.append(f'    api_key: "{updates["openai_api_key"]}"')
+    else:
+        lines.append('    # api_key: "sk-..."')
+    lines.append(f'    model: "{updates.get("openai_model", "gpt-4o-mini")}"')
+
+    lines.extend([
+        "",
+        "  anthropic:",
+    ])
+    if updates.get("anthropic_api_key"):
+        lines.append(f'    api_key: "{updates["anthropic_api_key"]}"')
+    else:
+        lines.append('    # api_key: "sk-ant-..."')
+    lines.append(f'    model: "{updates.get("anthropic_model", "claude-sonnet-4-5")}"')
+
+    lines.extend([
+        "",
+        "  ollama:",
+        f'    base_url: "{updates.get("ollama_base_url", "http://localhost:11434")}"',
+        f'    model: "{updates.get("ollama_model", "llama3.2")}"',
+        "",
+        "context:",
+        "  include_history: true",
+        "  history_length: 10",
+        "  include_env_vars: true",
+        "  include_git_state: true",
+        "",
+        "output:",
+        "  show_conversation: true",
+        "  show_reasoning: true",
+        "  use_colors: true",
+    ])
+
+    config_path.write_text("\n".join(lines) + "\n")
+    import stat
+    config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def run_history_search() -> int:
+    """
+    Search and display commands from hai history.
+
+    Uses gum filter for fuzzy search when available.
+
+    Returns:
+        int: Exit code
+    """
+    from hai_sh.init import get_hai_dir
+    import json
+
+    history_dir = get_hai_dir() / "logs"
+    if not history_dir.exists():
+        print("No history found. Run some hai commands first!")
+        return 0
+
+    # Collect history entries from memory files
+    commands = []
+    memory_file = get_hai_dir() / "memory.json"
+    if memory_file.exists():
+        try:
+            data = json.loads(memory_file.read_text())
+            for entry in data.get("interactions", []):
+                cmd = entry.get("command", "")
+                if cmd:
+                    commands.append(cmd)
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    if not commands:
+        print("No command history found yet.")
+        return 0
+
+    # Deduplicate while preserving order (most recent first)
+    seen = set()
+    unique_commands = []
+    for cmd in reversed(commands):
+        if cmd not in seen:
+            seen.add(cmd)
+            unique_commands.append(cmd)
+
+    selected = gum.filter_list(unique_commands, placeholder="Search history...")
+    if selected:
+        print(f"\nSelected: {selected}")
+        if gum.confirm("Execute this command?"):
+            result = execute_command(selected)
+            if result.success and result.stdout:
+                print(result.stdout)
+            elif not result.success:
+                print(f"Command failed with exit code {result.exit_code}", file=sys.stderr)
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr)
+            return 0 if result.success else result.exit_code
+    return 0
+
+
+# Patterns that indicate a command could be destructive
+DANGEROUS_COMMAND_PATTERNS = [
+    "rm ",
+    "rm -",
+    "rmdir ",
+    "mkfs",
+    "dd if=",
+    "chmod 777",
+    "chmod -R",
+    "chown -R",
+    "> /dev/",
+    "kill -9",
+    "pkill",
+    "reboot",
+    "shutdown",
+    "halt",
+    "poweroff",
+    "drop table",
+    "drop database",
+    "truncate ",
+    "format ",
+]
+
+
+def is_dangerous_command(command: str) -> bool:
+    """Check if a command matches known dangerous patterns."""
+    cmd_lower = command.lower()
+    return any(pattern in cmd_lower for pattern in DANGEROUS_COMMAND_PATTERNS)
+
+
+def print_output(text: str) -> None:
+    """
+    Print command output, using gum pager for long content.
+
+    Uses pager when output exceeds terminal height and gum is available.
+    Always prints directly when output is short or gum is unavailable.
+    """
+    if not text:
+        return
+
+    line_count = text.count("\n") + 1
+    try:
+        terminal_height = os.get_terminal_size().lines
+    except (OSError, ValueError):
+        terminal_height = 40  # Reasonable default
+
+    if line_count > terminal_height and gum.has_gum() and gum._is_interactive():
+        gum.page(text)
+    else:
+        print(text)
 
 
 def main():
@@ -391,6 +706,14 @@ def main():
         # Parse arguments
         parser = create_parser()
         args = parser.parse_args()
+
+        # Handle --setup wizard
+        if args.setup:
+            return run_setup_wizard()
+
+        # Handle --history search
+        if args.history:
+            return run_history_search()
 
         # If no query provided, show help
         if not args.query:
@@ -426,6 +749,10 @@ def main():
         except ConfigLoadError as e:
             handle_config_error(str(e))
             return 1
+
+        # Override provider if --provider flag is set
+        if args.provider:
+            config['provider'] = args.provider
 
         # Initialize memory manager
         memory_manager = MemoryManager(config)
@@ -490,13 +817,15 @@ def main():
             print(f"Debug: System prompt: {system_prompt[:100]}...", file=sys.stderr)
 
         try:
-            # Generate with retry - pass system prompt separately
-            response = generate_with_retry(
+            # Generate with retry - show spinner during LLM processing
+            response = gum.spin(
+                "hai is thinking...",
+                generate_with_retry,
                 provider=provider,
                 prompt=user_query,
                 context=context,
                 max_retries=3,
-                system_prompt=system_prompt
+                system_prompt=system_prompt,
             )
 
         except Exception as e:
@@ -558,15 +887,20 @@ def main():
         else:
             auto_exec = should_auto_execute(confidence, config)
 
+        # Check for dangerous commands — override auto-execute to require confirmation
+        if auto_exec and is_dangerous_command(command):
+            print(f"\n{gum.warn('This command may modify or delete data')}")
+            auto_exec = False  # Force confirmation for dangerous commands
+
         if auto_exec:
             # Auto-execute: Show command, execute immediately, then show collapsed explanation
             print(f"\n{BOLD}${RESET} {GREEN}{command}{RESET}")
             result = execute_command(command)
 
-            # Display result
+            # Display result (use pager for long output)
             if result.success:
                 if result.stdout:
-                    print(result.stdout)
+                    print_output(result.stdout)
             else:
                 print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
                 if result.stderr:
@@ -594,22 +928,30 @@ def main():
 
         else:
             # Manual confirmation required: Show explanation first, then ask
-            print(f"\n{explanation}")
+            # Use gum styled output for explanation when available
+            styled_explanation = gum.styled(
+                explanation,
+                border="rounded",
+                border_foreground="39",
+                padding="0 1",
+            )
+            print(f"\n{styled_explanation}")
             print(f"\n{BOLD}Command:{RESET} {GREEN}{command}{RESET}")
             print(f"{BOLD}Confidence:{RESET} {conf_color}{confidence}%{RESET}")
 
-            if not get_user_confirmation(command):
+            action, final_command = get_user_confirmation(command)
+            if action == "cancel":
                 print("\nCommand execution cancelled")
                 return 0
 
-            # Execute command
+            # Execute command (may have been edited)
             print("\nExecuting...\n")
-            result = execute_command(command)
+            result = execute_command(final_command)
 
-            # Display result
+            # Display result (use pager for long output)
             if result.success:
                 if result.stdout:
-                    print(result.stdout)
+                    print_output(result.stdout)
             else:
                 print(f"{RED}Command failed with exit code {result.exit_code}{RESET}")
                 if result.stderr:
@@ -618,7 +960,7 @@ def main():
             # Update memory with interaction
             memory_manager.update_memory(
                 query=user_query,
-                command=command,
+                command=final_command,
                 result=result.stdout if result.success else result.stderr,
                 success=result.success
             )
