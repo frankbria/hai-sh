@@ -111,7 +111,7 @@ from hai_sh.privacy import (
 )
 from hai_sh import gum as gum
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __all__ = [
     "__version__",
     "get_hai_dir",
