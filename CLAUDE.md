@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **hai** (pronounce like "hi") is an AI-powered terminal assistant that translates natural language into bash commands. It's a thin, context-aware wrapper around bash providing dual-layer output (conversation + execution) via LLM providers (OpenAI, Anthropic, Ollama).
 
-**Current Status**: v0.1 Pre-release (576 tests, 92% coverage)
+**Current Status**: v0.1.4 (1147 tests, 85% coverage)
 
 ## Development Commands
 
@@ -75,16 +75,25 @@ The codebase follows a modular architecture with clear separation of concerns:
 ```
 hai_sh/
 ├── __main__.py          # CLI entry point (argparse)
+├── app_mode.py          # Application mode detection & routing
 ├── config.py            # YAML config loading & validation (Pydantic schemas)
 ├── context.py           # Context gathering (cwd, git state, env vars)
-├── input_detector.py    # Input parsing (@hai prefix, query extraction)
-├── prompt.py            # LLM prompt building & response parsing
 ├── executor.py          # Command execution (subprocess, pipelines)
-├── output.py            # ANSI color handling, TTY detection
 ├── formatter.py         # Dual-layer output formatting
+├── gum.py               # Gum TUI integration for enhanced terminal UX
 ├── init.py              # ~/.hai directory initialization
+├── input_detector.py    # Input parsing (@hai prefix, query extraction)
 ├── install_shell.py     # Shell integration installer
+├── memory.py            # Three-tier context memory system
+├── output.py            # ANSI color handling, TTY detection
+├── privacy.py           # Privacy warnings for cloud LLM providers
+├── prompt.py            # LLM prompt building & response parsing
+├── provider_manager.py  # Provider lifecycle management
+├── rate_limit.py        # Token bucket rate limiting
+├── redaction.py         # Sensitive data output redaction
 ├── schema.py            # Pydantic data models
+├── theme.py             # Terminal theme & color definitions
+├── tui.py               # Textual/Rich TUI application
 ├── providers/
 │   ├── base.py          # BaseLLMProvider abstract class
 │   ├── openai.py        # OpenAI provider implementation
@@ -136,18 +145,19 @@ User ← Output Formatter ← Executor ← Response Parser ← LLM Response
 
 ### Testing Strategy
 
-**Unit Tests (560 tests)**
+**Unit Tests (1073 tests)**
 - Each module has corresponding test_*.py in tests/unit/
 - MockLLMProvider in tests/conftest.py for consistent testing
 - Fixtures for config, context, providers in tests/conftest.py
 
-**Integration Tests (16 tests)**
+**Integration Tests (74 tests)**
 - End-to-end workflows in tests/integration/
 - Test realistic use cases: file operations, git workflows, system queries
+- Provider-specific tests (OpenAI, Anthropic, Ollama) and cross-provider scenarios
 - Use MockLLMProvider to avoid API dependencies
 
 **Coverage Requirements**
-- Target: >85% coverage (currently 92.18%)
+- Target: >85% coverage (currently 85%)
 - Branch coverage enabled via pytest-cov
 - Excluded: __repr__, raise NotImplementedError, TYPE_CHECKING blocks
 

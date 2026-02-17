@@ -6,9 +6,9 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.1.3-blue.svg)](https://pypi.org/project/hai-sh/)
-[![Tests](https://img.shields.io/badge/tests-622%20passing-brightgreen.svg)](https://github.com/frankbria/hai-sh)
-[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen.svg)](https://github.com/frankbria/hai-sh)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.1.4-blue.svg)](https://pypi.org/project/hai-sh/)
+[![Tests](https://img.shields.io/badge/tests-1147%20passing-brightgreen.svg)](https://github.com/frankbria/hai-sh)
+[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen.svg)](https://github.com/frankbria/hai-sh)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 `hai` (pronounce like "hi") is a thin, context-aware wrapper around bash that brings natural language command generation directly to your terminal. Stop context-switching to look up git commands, bash syntax, or flags—just ask hai.
@@ -80,36 +80,36 @@ Commands with high confidence (≥85%) execute immediately. The explanation is s
 - **Multi-step Commands**: Handles complex workflows with `&&` chaining
 - **Environment Preservation**: Safe environment variable handling
 - **Git Integration**: Context-aware git operations
-- **Comprehensive Testing**: 622 tests, 82% coverage
+- **Comprehensive Testing**: 1147 tests, 85% coverage
 
 ## 🚀 Status
 
-**Current Version:** v0.1.3 (Published on PyPI)
+**Current Version:** v0.1.4 (Published on PyPI)
 
 hai follows an agile development approach with frequent version increments.
 
-### What's New (Updated: 2024-12-20)
+### What's New in v0.1.4 (2026-02-16)
 
-**v0.1.0 PyPI Release:**
-- ✅ Published to PyPI - install with `pipx install hai-sh`
-- ✅ 622 tests passing (100% pass rate)
-- ✅ Shell integration with Ctrl+X Ctrl+H keyboard shortcut
-- ✅ Three LLM providers: OpenAI, Anthropic, Ollama
-- ✅ Complete installation guide ([INSTALL.md](./INSTALL.md))
-- ✅ Comprehensive configuration guide ([CONFIGURATION.md](./CONFIGURATION.md))
-- ✅ 20+ usage examples and tutorial ([USAGE.md](./USAGE.md))
-- ✅ Integration test suite with realistic use cases
-- ✅ Error messages and help system
-- ✅ ANSI color support with TTY detection
-- ✅ Dual-layer output formatter
+- ✅ **Gum TUI integration** for enhanced terminal UX (113 new tests)
+- ✅ **Three-tier memory system** for enhanced context collection
+- ✅ **OpenCode review workflow** integration
+- ✅ **OpenAI compatibility fix** for None/empty API responses
+- ✅ **httpx pinned** to <0.28 for provider stability
+- ✅ 1147 tests passing (85% coverage)
 
-**Core Features (v0.1):**
-- ✅ Command execution engine
-- ✅ Context gathering (cwd, git, env)
-- ✅ LLM providers (OpenAI, Anthropic, Ollama)
-- ✅ Shell integration (bash, zsh)
-- ✅ Configuration system
-- ✅ Output formatting
+### Previous Releases
+
+**v0.1.3:**
+- Shell alias interference fix
+- Type hints and debug logging improvements
+- Auto-execute and parallel context optimization
+
+**v0.1.0 (Initial PyPI Release):**
+- Published to PyPI - install with `pipx install hai-sh`
+- Shell integration with Ctrl+X Ctrl+H keyboard shortcut
+- Three LLM providers: OpenAI, Anthropic, Ollama
+- Dual-layer output formatter with ANSI color support
+- Complete documentation suite (INSTALL, CONFIGURATION, USAGE)
 
 ### Roadmap
 
@@ -508,10 +508,10 @@ ruff hai_sh/ tests/
 
 ### Current Test Status
 
-- **Total Tests**: 600+ (all passing ✅)
-- **Coverage**: 92%+
-- **Unit Tests**: 560+
-- **Integration Tests**: 40+ (provider-specific + cross-provider)
+- **Total Tests**: 1147 (all passing ✅)
+- **Coverage**: 85%
+- **Unit Tests**: 1073
+- **Integration Tests**: 74 (provider-specific + cross-provider)
 - **Providers Tested**: OpenAI, Anthropic, Ollama
 
 ## 🎯 Design Philosophy
@@ -578,19 +578,17 @@ hai includes comprehensive test coverage:
 
 ### Test Categories
 
-- **Unit Tests** (560): Core functionality, edge cases, error handling
-- **Integration Tests** (16): End-to-end workflows with realistic use cases
-  - Files modified in last 24 hours
-  - TypeScript files importing React
-  - Disk space analysis
-  - Python venv setup
-  - Git workflows
+- **Unit Tests** (1073): Core functionality, edge cases, error handling
+- **Integration Tests** (74): End-to-end workflows with realistic use cases
+  - Provider-specific tests (OpenAI, Anthropic, Ollama)
+  - Cross-provider scenarios
+  - File operations, git workflows, system queries
 
 ### Test Infrastructure
 
 - **Framework**: pytest with pytest-cov
 - **Mocking**: MockLLMProvider for consistent testing
-- **Coverage**: 92.18% code coverage
+- **Coverage**: 85% code coverage
 - **CI/CD**: Ready (workflows TBD)
 
 ## 🐛 Troubleshooting
@@ -632,7 +630,7 @@ This project is licensed under the **GNU Affero General Public License v3.0** - 
 - **GitHub**: https://github.com/frankbria/hai-sh
 - **Issues**: https://github.com/frankbria/hai-sh/issues
 - **Discussions**: https://github.com/frankbria/hai-sh/discussions
-- **PyPI** (coming soon): https://pypi.org/project/hai-sh/
+- **PyPI**: https://pypi.org/project/hai-sh/
 
 ## 🙏 Inspiration & Credits
 
@@ -643,15 +641,15 @@ This project is licensed under the **GNU Affero General Public License v3.0** - 
 ## 📊 Project Stats
 
 - **Lines of Code**: ~10,000+
-- **Tests**: 576 (100% passing)
-- **Coverage**: 92.18%
+- **Tests**: 1147 (100% passing)
+- **Coverage**: 85%
 - **Documentation**: 3,362 lines (INSTALL, CONFIGURATION, USAGE)
 - **Python Version**: 3.9+
 - **License**: AGPL-3.0
 
 ---
 
-**Status**: 🚧 Under Active Development | v0.1 Pre-release
+**Status**: 🚧 Under Active Development | v0.1.4
 
 Say "hai" to your new shell assistant! 👋
 
