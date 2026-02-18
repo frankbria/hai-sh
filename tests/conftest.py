@@ -11,8 +11,9 @@ import pytest
 import requests
 import yaml
 
-# Default model used for Ollama integration tests
-OLLAMA_TEST_MODEL = "llama3.2"
+# Default model used for Ollama integration tests.
+# Override via HAI_TEST_OLLAMA_MODEL env var (e.g., HAI_TEST_OLLAMA_MODEL=mistral pytest -m ollama)
+OLLAMA_TEST_MODEL = os.environ.get("HAI_TEST_OLLAMA_MODEL", "llama3.2")
 
 
 @pytest.fixture

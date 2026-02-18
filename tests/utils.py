@@ -5,6 +5,8 @@ Test utilities and helper functions for hai-sh tests.
 from pathlib import Path
 from typing import Any
 
+from tests.conftest import OLLAMA_TEST_MODEL
+
 
 def create_sample_config(config_dir: Path, provider: str = "ollama") -> Path:
     """
@@ -21,7 +23,7 @@ def create_sample_config(config_dir: Path, provider: str = "ollama") -> Path:
 
     config_data = {
         "provider": provider,
-        "model": "llama3.2" if provider == "ollama" else "gpt-4o-mini",
+        "model": OLLAMA_TEST_MODEL if provider == "ollama" else "gpt-4o-mini",
         "providers": {
             "openai": {
                 "api_key": "sk-test-key",
@@ -29,7 +31,7 @@ def create_sample_config(config_dir: Path, provider: str = "ollama") -> Path:
             },
             "ollama": {
                 "base_url": "http://localhost:11434",
-                "model": "llama3.2",
+                "model": OLLAMA_TEST_MODEL,
             },
         },
         "context": {

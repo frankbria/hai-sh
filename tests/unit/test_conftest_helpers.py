@@ -5,6 +5,7 @@ Tests the provider availability check functions used by test fixtures
 and skip decorators.
 """
 
+import os
 from unittest.mock import patch, MagicMock
 
 import requests
@@ -72,3 +73,36 @@ class TestIsOllamaModelAvailable:
             json={"name": "mistral"},
             timeout=5,
         )
+
+
+class TestOllamaTestModelEnvVar:
+    """Tests for HAI_TEST_OLLAMA_MODEL environment variable support."""
+
+    def test_defaults_to_llama32(self):
+        """OLLAMA_TEST_MODEL defaults to llama3.2 when env var is not set."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("HAI_TEST_OLLAMA_MODEL", None)
+            # Re-import to pick up the env var change
+            import importlib
+            import tests.conftest as conftest_module
+
+            importlib.reload(conftest_module)
+            assert conftest_module.OLLAMA_TEST_MODEL == "llama3.2"
+
+    def test_reads_from_env_var(self):
+        """OLLAMA_TEST_MODEL reads from HAI_TEST_OLLAMA_MODEL env var."""
+        with patch.dict(os.environ, {"HAI_TEST_OLLAMA_MODEL": "mistral"}):
+            import importlib
+            import tests.conftest as conftest_module
+
+            importlib.reload(conftest_module)
+            assert conftest_module.OLLAMA_TEST_MODEL == "mistral"
+
+    def test_env_var_empty_string_uses_empty(self):
+        """Empty env var is respected (not treated as unset)."""
+        with patch.dict(os.environ, {"HAI_TEST_OLLAMA_MODEL": ""}):
+            import importlib
+            import tests.conftest as conftest_module
+
+            importlib.reload(conftest_module)
+            assert conftest_module.OLLAMA_TEST_MODEL == ""

@@ -9,7 +9,7 @@ import subprocess
 import pytest
 import requests
 
-from tests.conftest import skip_if_no_ollama
+from tests.conftest import OLLAMA_TEST_MODEL, skip_if_no_ollama
 
 
 # Skip all tests in this module if Ollama is not available
@@ -27,27 +27,19 @@ def ollama_config_file(tmp_path):
     import yaml
 
     config = {
-        'provider': 'ollama',
-        'model': 'qwen3:8b',
-        'providers': {
-            'ollama': {
-                'base_url': 'http://localhost:11434',
-                'model': 'qwen3:8b'
-            }
+        "provider": "ollama",
+        "model": OLLAMA_TEST_MODEL,
+        "providers": {"ollama": {"base_url": "http://localhost:11434", "model": OLLAMA_TEST_MODEL}},
+        "context": {
+            "include_history": False,
+            "include_git_state": False,
+            "include_env_vars": False,
         },
-        'context': {
-            'include_history': False,
-            'include_git_state': False,
-            'include_env_vars': False
-        },
-        'output': {
-            'show_conversation': True,
-            'use_colors': False
-        }
+        "output": {"show_conversation": True, "use_colors": False},
     }
 
     config_file = tmp_path / "config.yaml"
-    with open(config_file, 'w') as f:
+    with open(config_file, "w") as f:
         yaml.dump(config, f)
 
     return config_file
@@ -65,20 +57,17 @@ def run_hai(query: str, config_file: str) -> tuple[str, str, int]:
         tuple: (stdout, stderr, exit_code)
     """
     result = subprocess.run(
-        ['python', '-m', 'hai_sh', '--config', str(config_file), query],
+        ["python", "-m", "hai_sh", "--config", str(config_file), query],
         capture_output=True,
         text=True,
-        timeout=60
+        timeout=60,
     )
     return result.stdout, result.stderr, result.returncode
 
 
 def test_question_mode_ls_flags(ollama_config_file):
     """Test question mode with a simple question about ls flags."""
-    stdout, stderr, exit_code = run_hai(
-        "What does the -la flag do in ls?",
-        ollama_config_file
-    )
+    stdout, stderr, exit_code = run_hai("What does the -la flag do in ls?", ollama_config_file)
 
     assert exit_code == 0, f"Command failed with stderr: {stderr}"
     assert stdout, "No output received"
@@ -98,8 +87,7 @@ def test_question_mode_ls_flags(ollama_config_file):
 def test_question_mode_difference_between_commands(ollama_config_file):
     """Test asking about the difference between two commands."""
     stdout, stderr, exit_code = run_hai(
-        "What's the difference between grep and awk?",
-        ollama_config_file
+        "What's the difference between grep and awk?", ollama_config_file
     )
 
     assert exit_code == 0, f"Command failed with stderr: {stderr}"
@@ -118,10 +106,7 @@ def test_question_mode_difference_between_commands(ollama_config_file):
 
 def test_question_mode_explain_concept(ollama_config_file):
     """Test asking for an explanation of a concept."""
-    stdout, stderr, exit_code = run_hai(
-        "How does pipe | work in bash?",
-        ollama_config_file
-    )
+    stdout, stderr, exit_code = run_hai("How does pipe | work in bash?", ollama_config_file)
 
     assert exit_code == 0, f"Command failed with stderr: {stderr}"
     assert stdout, "No output received"
@@ -138,10 +123,7 @@ def test_question_mode_explain_concept(ollama_config_file):
 
 def test_question_mode_when_to_use(ollama_config_file):
     """Test asking when to use a particular tool."""
-    stdout, stderr, exit_code = run_hai(
-        "When should I use sudo?",
-        ollama_config_file
-    )
+    stdout, stderr, exit_code = run_hai("When should I use sudo?", ollama_config_file)
 
     assert exit_code == 0, f"Command failed with stderr: {stderr}"
     assert stdout, "No output received"
@@ -158,10 +140,7 @@ def test_question_mode_when_to_use(ollama_config_file):
 
 def test_command_mode_still_works(ollama_config_file):
     """Verify command mode still works (regression test)."""
-    stdout, stderr, exit_code = run_hai(
-        "show me the current directory",
-        ollama_config_file
-    )
+    stdout, stderr, exit_code = run_hai("show me the current directory", ollama_config_file)
 
     # Note: Since this requires user confirmation, we expect it to fail
     # or produce output with the command and confirmation prompt
@@ -188,16 +167,10 @@ def test_command_mode_still_works(ollama_config_file):
 def test_question_mode_vs_command_mode_detection(ollama_config_file):
     """Test that the system correctly distinguishes questions from commands."""
     # Question query
-    q_stdout, q_stderr, q_exit = run_hai(
-        "What is the purpose of chmod?",
-        ollama_config_file
-    )
+    q_stdout, _q_stderr, _q_exit = run_hai("What is the purpose of chmod?", ollama_config_file)
 
     # Command query
-    c_stdout, c_stderr, c_exit = run_hai(
-        "list files in current directory",
-        ollama_config_file
-    )
+    c_stdout, _c_stderr, _c_exit = run_hai("list files in current directory", ollama_config_file)
 
     # Question mode: no execution prompt
     assert "Execute this command?" not in q_stdout
