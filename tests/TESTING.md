@@ -149,7 +149,19 @@ pytest tests/integration/test_integration_ollama.py::TestOllamaBasicGeneration::
 ```
 
 **Default Model Tested:**
-- `llama3.2` (8B parameters)
+- `llama3.2` (overridable via `HAI_TEST_OLLAMA_MODEL` env var)
+
+#### Using a Custom Ollama Model
+
+If you have a different model installed, set `HAI_TEST_OLLAMA_MODEL`:
+
+```bash
+# Run Ollama tests with a custom model
+HAI_TEST_OLLAMA_MODEL=mistral pytest -m "integration and ollama"
+
+# Make sure the model is pulled first
+ollama pull mistral
+```
 
 ### Testing All Providers
 
