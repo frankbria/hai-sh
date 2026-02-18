@@ -28,7 +28,6 @@ def ollama_config_file(tmp_path):
 
     config = {
         "provider": "ollama",
-        "model": OLLAMA_TEST_MODEL,
         "providers": {"ollama": {"base_url": "http://localhost:11434", "model": OLLAMA_TEST_MODEL}},
         "context": {
             "include_history": False,

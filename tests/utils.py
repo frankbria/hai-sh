@@ -23,7 +23,6 @@ def create_sample_config(config_dir: Path, provider: str = "ollama") -> Path:
 
     config_data = {
         "provider": provider,
-        "model": OLLAMA_TEST_MODEL if provider == "ollama" else "gpt-4o-mini",
         "providers": {
             "openai": {
                 "api_key": "sk-test-key",
