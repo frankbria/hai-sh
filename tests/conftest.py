@@ -203,7 +203,6 @@ def test_config_openai(tmp_path: Path) -> Generator[Path, None, None]:
 
     config_content = {
         "provider": "openai",
-        "model": "gpt-4o-mini",
         "providers": {
             "openai": {
                 "api_key": api_key,
@@ -255,7 +254,6 @@ def test_config_anthropic(tmp_path: Path) -> Generator[Path, None, None]:
 
     config_content = {
         "provider": "anthropic",
-        "model": "claude-sonnet-4-5",
         "providers": {
             "anthropic": {
                 "api_key": api_key,
@@ -308,7 +306,6 @@ def test_config_ollama(tmp_path: Path) -> Generator[Path, None, None]:
 
     config_content = {
         "provider": "ollama",
-        "model": OLLAMA_TEST_MODEL,
         "providers": {
             "ollama": {
                 "base_url": "http://localhost:11434",
