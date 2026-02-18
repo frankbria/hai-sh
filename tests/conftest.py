@@ -11,6 +11,9 @@ import pytest
 import requests
 import yaml
 
+# Default model used for Ollama integration tests
+OLLAMA_TEST_MODEL = "llama3.2"
+
 
 @pytest.fixture
 def tmp_config_dir(tmp_path: Path) -> Generator[Path, None, None]:
@@ -289,18 +292,26 @@ def test_config_ollama(tmp_path: Path) -> Generator[Path, None, None]:
 
     Yields:
         Path: Path to temporary config file
+
+    Raises:
+        pytest.skip: If Ollama server is not running or model is unavailable
     """
+    if not is_ollama_available():
+        pytest.skip("Ollama not running on localhost:11434")
+    if not is_ollama_model_available(OLLAMA_TEST_MODEL):
+        pytest.skip(f"Ollama model '{OLLAMA_TEST_MODEL}' not available")
+
     config_dir = tmp_path / ".hai"
     config_dir.mkdir()
     config_file = config_dir / "config.yaml"
 
     config_content = {
         "provider": "ollama",
-        "model": "llama3.2",
+        "model": OLLAMA_TEST_MODEL,
         "providers": {
             "ollama": {
                 "base_url": "http://localhost:11434",
-                "model": "llama3.2",
+                "model": OLLAMA_TEST_MODEL,
             }
         },
         "context": {
@@ -331,8 +342,7 @@ def is_openai_available() -> bool:
         bool: True if OPENAI_API_KEY is set and TEST_OPENAI is enabled
     """
     return (
-        os.environ.get("OPENAI_API_KEY") is not None
-        and os.environ.get("TEST_OPENAI", "0") == "1"
+        os.environ.get("OPENAI_API_KEY") is not None and os.environ.get("TEST_OPENAI", "0") == "1"
     )
 
 
@@ -363,6 +373,27 @@ def is_ollama_available() -> bool:
         return False
 
 
+def is_ollama_model_available(model: str) -> bool:
+    """
+    Check if a specific Ollama model is available locally.
+
+    Args:
+        model: The model name to check (e.g., "llama3.2")
+
+    Returns:
+        bool: True if the model is available on the local Ollama server
+    """
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/show",
+            json={"name": model},
+            timeout=5,
+        )
+        return response.status_code == 200
+    except (requests.RequestException, OSError):
+        return False
+
+
 # Skip decorators for provider-specific tests
 
 skip_if_no_openai = pytest.mark.skipif(
@@ -376,6 +407,6 @@ skip_if_no_anthropic = pytest.mark.skipif(
 )
 
 skip_if_no_ollama = pytest.mark.skipif(
-    not is_ollama_available(),
-    reason="Ollama not running on localhost:11434",
+    not is_ollama_available() or not is_ollama_model_available(OLLAMA_TEST_MODEL),
+    reason=f"Ollama not running on localhost:11434 or model '{OLLAMA_TEST_MODEL}' not available",
 )
