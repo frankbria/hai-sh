@@ -11,6 +11,9 @@ import pytest
 import requests
 import yaml
 
+# Default model used for Ollama integration tests
+OLLAMA_TEST_MODEL = "llama3.2"
+
 
 @pytest.fixture
 def tmp_config_dir(tmp_path: Path) -> Generator[Path, None, None]:
@@ -295,8 +298,8 @@ def test_config_ollama(tmp_path: Path) -> Generator[Path, None, None]:
     """
     if not is_ollama_available():
         pytest.skip("Ollama not running on localhost:11434")
-    if not is_ollama_model_available("llama3.2"):
-        pytest.skip("Ollama model 'llama3.2' not available")
+    if not is_ollama_model_available(OLLAMA_TEST_MODEL):
+        pytest.skip(f"Ollama model '{OLLAMA_TEST_MODEL}' not available")
 
     config_dir = tmp_path / ".hai"
     config_dir.mkdir()
@@ -304,11 +307,11 @@ def test_config_ollama(tmp_path: Path) -> Generator[Path, None, None]:
 
     config_content = {
         "provider": "ollama",
-        "model": "llama3.2",
+        "model": OLLAMA_TEST_MODEL,
         "providers": {
             "ollama": {
                 "base_url": "http://localhost:11434",
-                "model": "llama3.2",
+                "model": OLLAMA_TEST_MODEL,
             }
         },
         "context": {
@@ -404,6 +407,6 @@ skip_if_no_anthropic = pytest.mark.skipif(
 )
 
 skip_if_no_ollama = pytest.mark.skipif(
-    not is_ollama_available() or not is_ollama_model_available("llama3.2"),
-    reason="Ollama not running on localhost:11434 or model 'llama3.2' not available",
+    not is_ollama_available() or not is_ollama_model_available(OLLAMA_TEST_MODEL),
+    reason=f"Ollama not running on localhost:11434 or model '{OLLAMA_TEST_MODEL}' not available",
 )

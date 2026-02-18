@@ -7,7 +7,6 @@ and skip decorators.
 
 from unittest.mock import patch, MagicMock
 
-import pytest
 import requests
 
 from tests.conftest import is_ollama_model_available
