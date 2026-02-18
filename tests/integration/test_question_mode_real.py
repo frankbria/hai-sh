@@ -167,10 +167,10 @@ def test_command_mode_still_works(ollama_config_file):
 def test_question_mode_vs_command_mode_detection(ollama_config_file):
     """Test that the system correctly distinguishes questions from commands."""
     # Question query
-    q_stdout, q_stderr, q_exit = run_hai("What is the purpose of chmod?", ollama_config_file)
+    q_stdout, _q_stderr, _q_exit = run_hai("What is the purpose of chmod?", ollama_config_file)
 
     # Command query
-    c_stdout, c_stderr, c_exit = run_hai("list files in current directory", ollama_config_file)
+    c_stdout, _c_stderr, _c_exit = run_hai("list files in current directory", ollama_config_file)
 
     # Question mode: no execution prompt
     assert "Execute this command?" not in q_stdout

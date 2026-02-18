@@ -156,11 +156,11 @@ pytest tests/integration/test_integration_ollama.py::TestOllamaBasicGeneration::
 If you have a different model installed, set `HAI_TEST_OLLAMA_MODEL`:
 
 ```bash
-# Run Ollama tests with a custom model
-HAI_TEST_OLLAMA_MODEL=mistral pytest -m "integration and ollama"
-
-# Make sure the model is pulled first
+# First, make sure the model is pulled
 ollama pull mistral
+
+# Run Ollama tests with the custom model
+HAI_TEST_OLLAMA_MODEL=mistral pytest -m "integration and ollama"
 ```
 
 ### Testing All Providers
