@@ -104,41 +104,6 @@ def get_rate_limiter(provider_name: str, max_calls: int = 60, window_seconds: in
     return _rate_limiters[provider_name]
 
 
-def configure_rate_limit(provider_name: str, max_calls: int, window_seconds: int) -> RateLimiter:
-    """
-    Create or replace the rate limiter for a provider with custom limits.
-
-    Args:
-        provider_name: Name of the LLM provider
-        max_calls: Maximum calls per window
-        window_seconds: Time window in seconds
-
-    Returns:
-        RateLimiter: The newly configured rate limiter
-    """
-    _rate_limiters[provider_name] = RateLimiter(window_seconds, max_calls)
-    return _rate_limiters[provider_name]
-
-
-def get_wait_time(provider_name: str) -> float:
-    """
-    Get seconds until the next call is allowed for a provider.
-
-    Args:
-        provider_name: Name of the LLM provider
-
-    Returns:
-        float: Seconds to wait before the next call (0.0 if under the limit)
-    """
-    limiter = get_rate_limiter(provider_name)
-    now = datetime.now()
-    limiter.calls = [t for t in limiter.calls if now - t < limiter.window]
-    if len(limiter.calls) < limiter.max_calls:
-        return 0.0
-    oldest_call = max(limiter.calls)
-    return max(0.0, (oldest_call + limiter.window - now).total_seconds())
-
-
 def check_rate_limit(provider_name: str) -> tuple[bool, Optional[str]]:
     """
     Check rate limit for a provider.
