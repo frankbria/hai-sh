@@ -380,6 +380,27 @@
           "context_length": 4096
         }
       }
+    },
+    "bonsai-2:2b": {
+      "available": true,
+      "disk_bytes": 911364234,
+      "digest": "de2ccb4e732882d9f83c3c77ffb3db1b714910aa3bd92be48b43929f11263bef",
+      "parameter_size": "1.9B",
+      "quantization": "Q2_0",
+      "family": "qwen35",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 904302426,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": []

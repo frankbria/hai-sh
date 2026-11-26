@@ -9,6 +9,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | qwen3.5:0.8b | constrained | 0.57 | 100% | 100% | 28% (20–38) | 0% | 29% | 100% | 0.637 | 5.6 | 21 | accuracy, gap-to-reference, mode, latency |
 | hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf | constrained | 0.62 | 100% | 100% | 31% (23–41) | 3% | 33% | 100% | 0.578 | 1.0 | 39 | accuracy, gap-to-reference, mode |
 | gemma3:1b | constrained | 0.88 | 100% | 100% | 27% (19–37) | 0% | 29% | 100% | 0.644 | 1.6 | 28 | accuracy, gap-to-reference, mode |
+| bonsai-2:2b | constrained | 0.90 | 100% | 100% | 30% (22–40) | 5% | 33% | 100% | 0.672 | 15.1 | 20 | accuracy, gap-to-reference, mode, latency |
 | gemma4:e2b | constrained | 1.08 | 100% | 100% | 60% (50–70) | 44% | 62% | 100% | 0.354 | 4.3 | 15 | accuracy, mode |
 | qwen2.5-coder:1.5b | constrained | 1.17 | 100% | 100% | 31% (23–41) | 6% | 34% | 100% | 0.562 | 2.1 | 22 | accuracy, gap-to-reference, mode |
 | lfm3 | constrained | 1.18 | 99% | 100% | 54% (44–64) | 38% | 91% | 100% | 0.441 | 8.8 | 21 | accuracy, gap-to-reference, latency |
