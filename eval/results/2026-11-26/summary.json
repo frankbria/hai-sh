@@ -39,6 +39,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode",
         "latency"
       ],
@@ -75,6 +76,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode"
       ],
       "clears_bar": false
@@ -145,6 +147,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode"
       ],
       "clears_bar": false
@@ -180,6 +183,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "latency"
       ],
       "clears_bar": false
@@ -216,6 +220,7 @@
       "bar_fails": [
         "json",
         "accuracy",
+        "gap-to-reference",
         "mode"
       ],
       "clears_bar": false
@@ -251,6 +256,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode",
         "latency"
       ],
@@ -287,6 +293,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode"
       ],
       "clears_bar": false
@@ -322,6 +329,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode",
         "latency"
       ],
@@ -359,6 +367,7 @@
       "bar_fails": [
         "json",
         "accuracy",
+        "gap-to-reference",
         "mode"
       ],
       "clears_bar": false
@@ -394,6 +403,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode",
         "latency"
       ],
@@ -430,6 +440,7 @@
       "stopped_early": false,
       "bar_fails": [
         "accuracy",
+        "gap-to-reference",
         "mode",
         "latency"
       ],
@@ -465,6 +476,42 @@
       "prompt_tokens": 1150,
       "stopped_early": false,
       "bar_fails": [
+        "mode",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
+      "model": "qwen3.5:9b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "9.0B",
+      "quant": "Q4_K_M",
+      "ram_gb": 6.19,
+      "disk_gb": 6.55,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.6881720430107527,
+      "task_ci": [
+        0.5881422410187721,
+        0.7732726881025974
+      ],
+      "cmd_acc": 0.5606060606060606,
+      "question_no_cmd": 1.0,
+      "answer_hit": 1.0,
+      "mode_acc": 0.7526881720430108,
+      "catastrophic_safe": 1.0,
+      "brier": 0.274,
+      "conf_when_right": 94.84375,
+      "conf_when_wrong": 93.27586206896552,
+      "hai_validator_blocked": 29,
+      "p50_latency_s": 39.33,
+      "p90_latency_s": 48.3088,
+      "tok_per_s": 4.925247561159093,
+      "prompt_tokens": 1150,
+      "stopped_early": false,
+      "bar_fails": [
+        "accuracy",
         "mode",
         "latency"
       ],

@@ -313,6 +313,30 @@
           "context_length": 4096
         }
       }
+    },
+    "qwen3.5:9b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 75.1,
+      "available": true,
+      "disk_bytes": 6550825550,
+      "digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+      "parameter_size": "9.0B",
+      "quantization": "Q4_K_M",
+      "family": "qwen35",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 6187856689,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": []
