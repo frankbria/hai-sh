@@ -10,7 +10,7 @@
   "ollama_version": "0.40.18",
   "fixture": "/home/frankbria/.local/share/agent-runner/worktrees/hai-sh/20261126-112542-e21f70/eval/results/2026-11-26/fixture/work",
   "conditions": [
-    "constrained"
+    "baseline"
   ],
   "models": {
     "qwen3.5:0.8b": {
@@ -260,6 +260,11 @@
       ],
       "loaded": {
         "constrained": {
+          "size": 3146734631,
+          "size_vram": 0,
+          "context_length": 4096
+        },
+        "baseline": {
           "size": 3146734631,
           "size_vram": 0,
           "context_length": 4096
