@@ -8,7 +8,7 @@
     "gpu": "NVIDIA GeForce GTX 1050, 4096 MiB"
   },
   "ollama_version": "0.40.18",
-  "fixture": "/home/frankbria/.local/share/agent-runner/worktrees/hai-sh/20261126-044100-695c5f/eval/results/2026-11-26/fixture/work",
+  "fixture": "/home/frankbria/.local/share/agent-runner/worktrees/hai-sh/20261126-112542-e21f70/eval/results/2026-11-26/fixture/work",
   "conditions": [
     "constrained"
   ],

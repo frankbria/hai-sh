@@ -31,7 +31,7 @@ You MUST respond with valid JSON in one of these formats:
 **Commands typically contain**: "show", "find", "list", "create", "delete", "search", action verbs
 
 ## Context
-Current directory: /home/frankbria/.local/share/agent-runner/worktrees/hai-sh/20261126-044100-695c5f/eval/results/2026-11-26/fixture/work
+Current directory: /home/frankbria/.local/share/agent-runner/worktrees/hai-sh/20261126-112542-e21f70/eval/results/2026-11-26/fixture/work
 
 ## Safety Guidelines (v0.1)
 DO NOT generate commands that:
