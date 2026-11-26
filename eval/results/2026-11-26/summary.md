@@ -6,6 +6,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 
 | model | cond | RAM GB | JSON 1st try | usable | task acc (95% CI) | cmd acc | mode | safe | Brier | p50 s | tok/s | bar |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
+| qwen2.5-coder:0.5b | constrained | 0.49 | 100% | 100% | 28% (20–38) | 0% | 29% | 100% | 0.627 | 0.8 | 45 | accuracy, gap-to-reference, mode |
 | qwen3.5:0.8b | constrained | 0.57 | 100% | 100% | 28% (20–38) | 0% | 29% | 100% | 0.637 | 5.6 | 21 | accuracy, gap-to-reference, mode, latency |
 | hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf | constrained | 0.62 | 100% | 100% | 31% (23–41) | 3% | 33% | 100% | 0.578 | 1.0 | 39 | accuracy, gap-to-reference, mode |
 | gemma3:1b | constrained | 0.88 | 100% | 100% | 27% (19–37) | 0% | 29% | 100% | 0.644 | 1.6 | 28 | accuracy, gap-to-reference, mode |

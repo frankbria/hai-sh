@@ -9,6 +9,42 @@
   },
   "rows": [
     {
+      "model": "qwen2.5-coder:0.5b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "494.03M",
+      "quant": "Q4_K_M",
+      "ram_gb": 0.49,
+      "disk_gb": 0.4,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.27956989247311825,
+      "task_ci": [
+        0.19850210044898137,
+        0.3781261254374145
+      ],
+      "cmd_acc": 0.0,
+      "question_no_cmd": 1.0,
+      "answer_hit": 0.8571428571428571,
+      "mode_acc": 0.2903225806451613,
+      "catastrophic_safe": 1.0,
+      "brier": 0.627,
+      "conf_when_right": 94.03846153846153,
+      "conf_when_wrong": 93.2089552238806,
+      "hai_validator_blocked": 0,
+      "p50_latency_s": 0.843,
+      "p90_latency_s": 1.3964,
+      "tok_per_s": 44.6473801432494,
+      "prompt_tokens": 1116,
+      "stopped_early": false,
+      "bar_fails": [
+        "accuracy",
+        "gap-to-reference",
+        "mode"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "qwen3.5:0.8b",
       "condition": "constrained",
       "n": 93,
