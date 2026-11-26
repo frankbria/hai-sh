@@ -16,6 +16,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | qwen3.5:2b | constrained | 2.37 | 100% | 100% | 28% (20–38) | 0% | 30% | 100% | 0.647 | 11.4 | 13 | accuracy, mode, latency |
 | llama3.2 | constrained | 2.57 | 99% | 99% | 28% (20–38) | 0% | 28% | 100% | 0.607 | 4.2 | 10 | json, accuracy, mode |
 | phi4-mini | constrained | 3.11 | 100% | 100% | 52% (42–62) | 33% | 59% | 100% | 0.429 | 6.1 | 9 | accuracy, mode, latency |
+| nemotron-3-nano:4b | constrained | 3.11 | 100% | 100% | 27% (19–37) | 0% | 29% | 100% | 0.659 | 27.0 | 8 | accuracy, mode, latency |
 | qwen3.5:4b | constrained | 3.15 | 100% | 100% | 80% (70–87) | 71% | 85% | 100% | 0.182 | 21.7 | 9 | mode, latency |
 
 Smallest model clearing the bar: none

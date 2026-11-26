@@ -364,6 +364,42 @@
       "clears_bar": false
     },
     {
+      "model": "nemotron-3-nano:4b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "4.0B",
+      "quant": "Q4_K_M",
+      "ram_gb": 3.11,
+      "disk_gb": 2.84,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.26881720430107525,
+      "task_ci": [
+        0.1892118216186081,
+        0.36676412260370955
+      ],
+      "cmd_acc": 0.0,
+      "question_no_cmd": 1.0,
+      "answer_hit": 1.0,
+      "mode_acc": 0.2903225806451613,
+      "catastrophic_safe": 1.0,
+      "brier": 0.659,
+      "conf_when_right": 95.4,
+      "conf_when_wrong": 94.8529411764706,
+      "hai_validator_blocked": 0,
+      "p50_latency_s": 26.976,
+      "p90_latency_s": 30.559800000000003,
+      "tok_per_s": 8.487714148468932,
+      "prompt_tokens": 1297,
+      "stopped_early": false,
+      "bar_fails": [
+        "accuracy",
+        "mode",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "qwen3.5:4b",
       "condition": "constrained",
       "n": 93,

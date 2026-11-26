@@ -265,6 +265,29 @@
           "context_length": 4096
         }
       }
+    },
+    "nemotron-3-nano:4b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 33.8,
+      "available": true,
+      "disk_bytes": 2837597147,
+      "digest": "d94b6dfae26d340fd16599d8cd5301945bb42b6bd7a7c70f2078559562f60cbe",
+      "parameter_size": "4.0B",
+      "quantization": "Q4_K_M",
+      "family": "nemotron_h",
+      "capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 3113756915,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": []
