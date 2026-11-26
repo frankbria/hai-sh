@@ -137,10 +137,27 @@ class Ollama:
             pass
 
 
+NUM_PREDICT_CAP = 1024
+
+
 def provider_for(model: str, condition: str, base_url: str, thinking: bool) -> OllamaProvider:
-    cfg = {"base_url": base_url, "model": model, "timeout": 900}
+    # The timeout only bounds the gap between streamed chunks, so a model stuck
+    # in a repetition loop can stream for an hour. Cap generation instead; a
+    # usable hai answer is ~30-150 tokens, so the cap only cuts runaway output.
+    cfg = {
+        "base_url": base_url,
+        "model": model,
+        "timeout": 900,
+        "options": {"num_predict": NUM_PREDICT_CAP},
+    }
     if condition == "constrained":
-        cfg.update({"format": "schema", "temperature": 0, "options": {"seed": 0}})
+        cfg.update(
+            {
+                "format": "schema",
+                "temperature": 0,
+                "options": {"seed": 0, "num_predict": NUM_PREDICT_CAP},
+            }
+        )
         if thinking:
             cfg["think"] = False
     return OllamaProvider(cfg)
