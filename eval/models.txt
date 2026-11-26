@@ -18,3 +18,8 @@ gemma4:e4b
 qwen3.5:9b
 # third-party NL2Bash fine-tune (0.5B, trained on bare commands, not hai's JSON)
 hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf
+# added 2026-11-26 (recent small models; tags verified by pulling)
+granite4.2:3b
+bonsai-2:2b
+# base model of the nl2bash fine-tune above, for a direct comparison
+qwen2.5-coder:0.5b
