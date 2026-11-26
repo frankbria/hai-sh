@@ -1,0 +1,271 @@
+{
+  "hardware": {
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "nproc": 8,
+    "cpu": "Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz",
+    "mem": "31 GiB",
+    "gpu": "NVIDIA GeForce GTX 1050, 4096 MiB"
+  },
+  "ollama_version": "0.40.18",
+  "fixture": "/home/frankbria/.local/share/agent-runner/worktrees/hai-sh/20261126-044100-695c5f/eval/results/2026-11-26/fixture/work",
+  "conditions": [
+    "constrained"
+  ],
+  "models": {
+    "qwen3.5:0.8b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 17.7,
+      "available": true,
+      "disk_bytes": 1322069277,
+      "digest": "de63045f29755d4721c09d54c9b45c2dadb644f4fd7d604d4cac90d96049971c",
+      "parameter_size": "752.39M",
+      "quantization": "Q8_0",
+      "family": "qwen35",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 574074386,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "llama3.2:1b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 16.7,
+      "available": true,
+      "disk_bytes": 1321098329,
+      "digest": "baf6a787fdffd633537aa2eb51cfd54cb93ff08e28040095462bb63daf552878",
+      "parameter_size": "1.2B",
+      "quantization": "Q8_0",
+      "family": "llama",
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 1523497041,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "gemma3:1b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 10.8,
+      "available": true,
+      "disk_bytes": 806067407,
+      "digest": "97558784bdc9175075a72655bf360b15da17df6b3b9e5182af9f8c0c8e58ba7c",
+      "parameter_size": "999.89M",
+      "quantization": "Q4_K_M",
+      "family": "gemma3",
+      "capabilities": [
+        "completion"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 883173621,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "qwen2.5-coder:1.5b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 13.3,
+      "available": true,
+      "disk_bytes": 986062089,
+      "digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
+      "parameter_size": "1.5B",
+      "quantization": "Q4_K_M",
+      "family": "qwen2",
+      "capabilities": [
+        "completion",
+        "tools",
+        "insert"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 1173136342,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "lfm3": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 14.2,
+      "available": true,
+      "disk_bytes": 1099638680,
+      "digest": "b36a103fe2f8fbe9df2ceec88b9cfdf842dc04aaabe2b4677d1acf8e16570b5d",
+      "parameter_size": "1.7B",
+      "quantization": "Q4_K_M",
+      "family": "lfm3",
+      "capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 1177771047,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "qwen3.5:2b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 32.3,
+      "available": true,
+      "disk_bytes": 2683396812,
+      "digest": "0689d44085e06d165161a8a9a1731344278cfb5aade63a3c3dbdb48ab54b130a",
+      "parameter_size": "1.9B",
+      "quantization": "Q8_0",
+      "family": "qwen35",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 2369666414,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "gemma4:e2b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 55.9,
+      "available": true,
+      "disk_bytes": 4587156505,
+      "digest": "b37049369adfe3d2b653af0ab301a062ca5cbe96ace6aa0d3f2559ee9b563fc2",
+      "parameter_size": "4.6B",
+      "quantization": "Q4_K_M",
+      "family": "gemma4",
+      "capabilities": [
+        "completion",
+        "vision",
+        "audio",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 1083032206,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "qwen2.5-coder:3b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 24.7,
+      "available": true,
+      "disk_bytes": 1929912626,
+      "digest": "f72c60cabf6237b07f6e632b2c48d533cef25eda2efbd34bed21c5e9c01e6225",
+      "parameter_size": "3.1B",
+      "quantization": "Q4_K_M",
+      "family": "qwen2",
+      "capabilities": [
+        "completion",
+        "tools",
+        "insert"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 2168360795,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "llama3.2": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 24.3,
+      "available": true,
+      "disk_bytes": 2019393189,
+      "digest": "a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72",
+      "parameter_size": "3.2B",
+      "quantization": "Q4_K_M",
+      "family": "llama",
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 2567826307,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "phi4-mini": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 30.4,
+      "available": true,
+      "disk_bytes": 2491876774,
+      "digest": "78fad5d182a7c33065e153a5f8ba210754207ba9d91973f57dffa7f487363753",
+      "parameter_size": "3.8B",
+      "quantization": "Q4_K_M",
+      "family": "phi3",
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 3107297688,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    },
+    "qwen3.5:4b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 39.4,
+      "available": true,
+      "disk_bytes": 3324173934,
+      "digest": "d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04",
+      "parameter_size": "4.2B",
+      "quantization": "Q4_K_M",
+      "family": "qwen35",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 3146734631,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
+    }
+  },
+  "preexisting_models": []
+}
