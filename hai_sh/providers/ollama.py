@@ -45,6 +45,17 @@ class OllamaProvider(BaseLLMProvider):
                 - timeout: Request timeout in seconds (default: 60)
                 - stream: Enable streaming (default: True)
                 - temperature: Sampling temperature (default: 0.7)
+                - format: Optional structured-output constraint passed to
+                  Ollama: "json" (any JSON), "schema" (hai's response
+                  JSON schema), or a JSON-schema dict. Default: None (off).
+                - think: Optional bool sent as Ollama's ``think`` flag, for
+                  models that reason before answering. Default: None (unset).
+                - system_field: If True, send the system prompt in Ollama's
+                  ``system`` field instead of prepending it to the prompt.
+                  Default: False.
+                - options: Optional dict of extra Ollama options (e.g.
+                  seed, num_ctx, num_predict). Merged after temperature.
+                - keep_alive: Optional keep_alive value (e.g. "10m").
 
         Raises:
             ValueError: If configuration is invalid
@@ -64,6 +75,64 @@ class OllamaProvider(BaseLLMProvider):
         self.timeout = self.config.get("timeout", 60)
         self.stream = self.config.get("stream", True)
         self.temperature = self.config.get("temperature", 0.7)
+        self.format = self.config.get("format")
+        self.think = self.config.get("think")
+        self.system_field = self.config.get("system_field", False)
+        self.extra_options = self.config.get("options") or {}
+        self.keep_alive = self.config.get("keep_alive")
+        # Timing/token counts from the last completed request (Ollama's
+        # eval_count, eval_duration, prompt_eval_count, ...). Empty until a
+        # request finishes.
+        self.last_metrics: dict[str, Any] = {}
+
+    def _resolve_format(self) -> Optional[Any]:
+        """Return the value for Ollama's ``format`` field, or None."""
+        if self.format is None or self.format is False:
+            return None
+        if self.format == "schema":
+            from hai_sh.prompt import RESPONSE_JSON_SCHEMA
+            return RESPONSE_JSON_SCHEMA
+        return self.format
+
+    def build_payload(
+        self,
+        prompt: str,
+        context: Optional[dict[str, Any]] = None,
+        system_prompt: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Build the JSON body for Ollama's /api/generate.
+
+        With the default configuration this is identical to the historical
+        behaviour: system prompt, context and user prompt are concatenated
+        into ``prompt``. The optional settings (format, think, system_field,
+        options, keep_alive) are only added when configured.
+        """
+        if self.system_field and system_prompt and system_prompt.strip():
+            payload_prompt = self._format_prompt(prompt, context, None)
+        else:
+            payload_prompt = self._format_prompt(prompt, context, system_prompt)
+
+        options: dict[str, Any] = {"temperature": self.temperature}
+        options.update(self.extra_options)
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "prompt": payload_prompt,
+            "stream": self.stream,
+            "options": options,
+        }
+        if self.system_field and system_prompt and system_prompt.strip():
+            payload["system"] = system_prompt
+
+        fmt = self._resolve_format()
+        if fmt is not None:
+            payload["format"] = fmt
+        if self.think is not None:
+            payload["think"] = bool(self.think)
+        if self.keep_alive is not None:
+            payload["keep_alive"] = self.keep_alive
+        return payload
 
     def generate(
         self,
@@ -86,19 +155,9 @@ class OllamaProvider(BaseLLMProvider):
             RuntimeError: If Ollama is not running or request fails
         """
         try:
-            # Build the full prompt with system prompt and context
-            full_prompt = self._format_prompt(prompt, context, system_prompt)
-
             # Prepare API request
             url = f"{self.base_url}/api/generate"
-            payload = {
-                "model": self.model,
-                "prompt": full_prompt,
-                "stream": self.stream,
-                "options": {
-                    "temperature": self.temperature
-                }
-            }
+            payload = self.build_payload(prompt, context, system_prompt)
 
             # Make API request
             response = requests.post(
@@ -166,6 +225,23 @@ class OllamaProvider(BaseLLMProvider):
         if "stream" in config:
             stream = config["stream"]
             if not isinstance(stream, bool):
+                return False
+
+        # Validate format if provided
+        if "format" in config and config["format"] is not None:
+            fmt = config["format"]
+            if not (fmt in ("json", "schema") or isinstance(fmt, dict)):
+                return False
+
+        # Validate think / system_field if provided
+        for key in ("think", "system_field"):
+            if key in config and config[key] is not None:
+                if not isinstance(config[key], bool):
+                    return False
+
+        # Validate options if provided
+        if "options" in config and config["options"] is not None:
+            if not isinstance(config["options"], dict):
                 return False
 
         # Validate temperature if provided
@@ -271,6 +347,7 @@ class OllamaProvider(BaseLLMProvider):
 
                     # Check if done
                     if data.get("done", False):
+                        self._record_metrics(data)
                         break
                 except json.JSONDecodeError:
                     continue
@@ -288,4 +365,21 @@ class OllamaProvider(BaseLLMProvider):
             str: Response text
         """
         data = response.json()
+        self._record_metrics(data)
         return data.get("response", "").strip()
+
+    _METRIC_KEYS = (
+        "total_duration",
+        "load_duration",
+        "prompt_eval_count",
+        "prompt_eval_duration",
+        "eval_count",
+        "eval_duration",
+    )
+
+    def _record_metrics(self, data: Any) -> None:
+        """Keep Ollama's timing and token counts from a final response."""
+        if isinstance(data, dict):
+            self.last_metrics = {
+                k: data[k] for k in self._METRIC_KEYS if k in data
+            }

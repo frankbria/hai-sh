@@ -126,6 +126,20 @@ Response:
 - For questions: Provide clear, helpful answers"""
 
 
+# JSON schema for hai's response, for providers that support constrained
+# (grammar-based) decoding such as Ollama's ``format`` parameter. "command" is
+# optional so question-mode answers stay valid.
+RESPONSE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "explanation": {"type": "string"},
+        "command": {"type": "string"},
+        "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+    },
+    "required": ["explanation", "confidence"],
+}
+
+
 # Context template for variable substitution
 CONTEXT_TEMPLATE = """Current directory: {cwd}
 {git_context}

@@ -1,0 +1,20 @@
+# Candidate Ollama tags, smallest first. Lines starting with # are ignored.
+# A tag that fails to pull is recorded as "not available" and skipped, so
+# this list is checked against the live Ollama library at run time.
+qwen3.5:0.8b
+llama3.2:1b
+gemma3:1b
+qwen2.5-coder:1.5b
+lfm3
+qwen3.5:2b
+gemma4:e2b
+qwen2.5-coder:3b
+llama3.2
+phi4-mini
+qwen3.5:4b
+nemotron-3-nano:4b
+gemma4:e4b
+# reference (7-9B)
+qwen3.5:9b
+# third-party NL2Bash fine-tune (0.5B, trained on bare commands, not hai's JSON)
+hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf

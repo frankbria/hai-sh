@@ -1,0 +1,3 @@
+results/*/fixture/
+results/*/sandbox-scratch/
+__pycache__/

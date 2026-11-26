@@ -679,3 +679,97 @@ def test_generate_empty_system_prompt(mock_post):
 
     # Should still make the request
     assert mock_post.called
+
+
+# ============================================================================
+# Structured output / payload options (opt-in; defaults unchanged)
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_build_payload_defaults_match_legacy_shape():
+    """With default config the payload keeps the historical keys only."""
+    provider = OllamaProvider({"model": "llama3.2"})
+    payload = provider.build_payload("list files", None, "SYS")
+    assert set(payload) == {"model", "prompt", "stream", "options"}
+    assert payload["prompt"] == "SYS\n\nlist files"
+    assert payload["options"] == {"temperature": 0.7}
+
+
+@pytest.mark.unit
+def test_build_payload_schema_format_uses_response_schema():
+    from hai_sh.prompt import RESPONSE_JSON_SCHEMA
+    provider = OllamaProvider({"format": "schema"})
+    payload = provider.build_payload("list files")
+    assert payload["format"] == RESPONSE_JSON_SCHEMA
+    assert RESPONSE_JSON_SCHEMA["required"] == ["explanation", "confidence"]
+
+
+@pytest.mark.unit
+def test_build_payload_json_and_dict_format():
+    assert OllamaProvider({"format": "json"}).build_payload("x")["format"] == "json"
+    schema = {"type": "object"}
+    assert OllamaProvider({"format": schema}).build_payload("x")["format"] == schema
+
+
+@pytest.mark.unit
+def test_build_payload_think_system_field_options_keep_alive():
+    provider = OllamaProvider({
+        "think": False,
+        "system_field": True,
+        "temperature": 0,
+        "options": {"seed": 7, "num_ctx": 4096},
+        "keep_alive": "10m",
+    })
+    payload = provider.build_payload("find logs", {"cwd": "/tmp"}, "SYS")
+    assert payload["think"] is False
+    assert payload["system"] == "SYS"
+    assert payload["prompt"] == "Current directory: /tmp\n\nfind logs"
+    assert payload["options"] == {"temperature": 0, "seed": 7, "num_ctx": 4096}
+    assert payload["keep_alive"] == "10m"
+
+
+@pytest.mark.unit
+def test_validate_config_new_fields():
+    provider = OllamaProvider({})
+    assert provider.validate_config({"format": "schema", "think": False}) is True
+    assert provider.validate_config({"format": "yaml"}) is False
+    assert provider.validate_config({"think": "no"}) is False
+    assert provider.validate_config({"system_field": 1}) is False
+    assert provider.validate_config({"options": [1]}) is False
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_records_metrics_and_sends_format(mock_post):
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "response": '{"explanation": "x", "confidence": 90}',
+        "eval_count": 12,
+        "eval_duration": 1000,
+        "prompt_eval_count": 50,
+        "done": True,
+    }
+    mock_post.return_value = mock_response
+    provider = OllamaProvider({"stream": False, "format": "schema"})
+    out = provider.generate("what is ls?")
+    assert out.startswith("{")
+    assert mock_post.call_args.kwargs["json"]["format"]["type"] == "object"
+    assert provider.last_metrics == {
+        "eval_count": 12, "eval_duration": 1000, "prompt_eval_count": 50
+    }
+
+
+@pytest.mark.unit
+@patch('hai_sh.providers.ollama.requests.post')
+def test_generate_streaming_records_metrics(mock_post, valid_config):
+    mock_response = Mock()
+    mock_response.iter_lines.return_value = [
+        json.dumps({"response": "Hi", "done": False}).encode(),
+        json.dumps({"response": "", "done": True, "eval_count": 3,
+                    "total_duration": 99}).encode(),
+    ]
+    mock_post.return_value = mock_response
+    provider = OllamaProvider(valid_config)
+    assert provider.generate("hello") == "Hi"
+    assert provider.last_metrics == {"eval_count": 3, "total_duration": 99}
