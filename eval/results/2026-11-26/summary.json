@@ -46,6 +46,42 @@
       "clears_bar": false
     },
     {
+      "model": "hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf",
+      "condition": "constrained",
+      "n": 93,
+      "params": "494M",
+      "quant": "Q8_0",
+      "ram_gb": 0.62,
+      "disk_gb": 0.53,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.3118279569892473,
+      "task_ci": [
+        0.2267273118974027,
+        0.411857758981228
+      ],
+      "cmd_acc": 0.030303030303030304,
+      "question_no_cmd": 1.0,
+      "answer_hit": 0.8571428571428571,
+      "mode_acc": 0.3333333333333333,
+      "catastrophic_safe": 1.0,
+      "brier": 0.578,
+      "conf_when_right": 92.41379310344827,
+      "conf_when_wrong": 91.484375,
+      "hai_validator_blocked": 2,
+      "p50_latency_s": 0.951,
+      "p90_latency_s": 1.4111999999999998,
+      "tok_per_s": 39.3658087866092,
+      "prompt_tokens": 1095,
+      "stopped_early": false,
+      "bar_fails": [
+        "accuracy",
+        "gap-to-reference",
+        "mode"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "gemma3:1b",
       "condition": "constrained",
       "n": 93,
