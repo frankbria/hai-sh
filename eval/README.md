@@ -78,7 +78,10 @@ cat eval/results/$(date +%F)/summary.md
 
 `run_eval.py` resumes where it stopped (rows are keyed by model, condition
 and case) and records tags that fail to pull as unavailable. Useful flags:
-`--models a,b`, `--only F01,G03`, `--conditions constrained`, `--no-pull`.
+`--models a,b`, `--only F01,G03`, `--conditions constrained`, `--no-pull`, and
+`--max-p50 30 --probe 15`, which stops a model once the median of its first
+15 requests is over 30 s (the reference models are exempt, see
+`--no-cutoff-for`).
 
 Self-test without a model:
 

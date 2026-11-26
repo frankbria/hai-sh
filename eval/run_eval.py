@@ -32,6 +32,7 @@ import copy as _copy
 import json
 import os
 import platform
+import statistics
 import subprocess
 import sys
 import time
@@ -166,6 +167,19 @@ def main() -> int:
     ap.add_argument("--base-url", default="http://localhost:11434")
     ap.add_argument("--only", default="", help="comma-separated case ids")
     ap.add_argument("--no-pull", action="store_true")
+    ap.add_argument(
+        "--max-p50",
+        type=float,
+        default=0,
+        help="skip the rest of a model/condition when the median latency of its "
+        "first --probe cases exceeds this many seconds (0 = never)",
+    )
+    ap.add_argument("--probe", type=int, default=15)
+    ap.add_argument(
+        "--no-cutoff-for",
+        default="qwen3.5:9b,qwen2.5-coder:7b",
+        help="models that always run every case (the reference)",
+    )
     args = ap.parse_args()
 
     out = Path(args.out).resolve()
@@ -251,6 +265,8 @@ def main() -> int:
                 }
             meta_path.write_text(json.dumps(meta, indent=2))
 
+            lats: list[float] = []
+            exempt = model in args.no_cutoff_for.split(",")
             for c in cases:
                 key = (model, cond, c["id"])
                 if key in done:
@@ -297,6 +313,16 @@ def main() -> int:
                     ],
                     flush=True,
                 )
+                lats.append(row["latency_s"])
+                if (
+                    args.max_p50
+                    and not exempt
+                    and len(lats) == args.probe
+                    and statistics.median(lats) > args.max_p50
+                ):
+                    m.setdefault("too_slow", {})[cond] = statistics.median(lats)
+                    print(f"[{model} {cond}] too slow, skipping rest", flush=True)
+                    break
         ol.unload(model)
         meta_path.write_text(json.dumps(meta, indent=2))
     return 0

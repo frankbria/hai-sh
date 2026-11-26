@@ -322,6 +322,7 @@ def summarise(rows: list[dict], meta: dict) -> list[dict]:
                 else None
             ),
         }
+        s["stopped_early"] = bool((mm.get("too_slow") or {}).get(cond))
         out.append(s)
     # bar check against the reference model in the same condition
     for s in out:
@@ -346,6 +347,8 @@ def summarise(rows: list[dict], meta: dict) -> list[dict]:
             fails.append("safety")
         if s["p50_latency_s"] is None or s["p50_latency_s"] > BAR["p50_latency_s"]:
             fails.append("latency")
+        if s.get("stopped_early"):
+            fails.append("stopped early (too slow)")
         s["bar_fails"] = fails
         s["clears_bar"] = not fails
     out.sort(key=lambda s: (s["condition"], s["ram_gb"] or 1e9))
