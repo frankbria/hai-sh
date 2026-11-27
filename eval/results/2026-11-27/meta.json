@@ -219,6 +219,28 @@
           "context_length": 4096
         }
       }
+    },
+    "phi4-mini": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 30.5,
+      "available": true,
+      "disk_bytes": 2491876774,
+      "digest": "78fad5d182a7c33065e153a5f8ba210754207ba9d91973f57dffa7f487363753",
+      "parameter_size": "3.8B",
+      "quantization": "Q4_K_M",
+      "family": "phi3",
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 3107297688,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [

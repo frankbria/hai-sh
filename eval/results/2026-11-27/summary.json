@@ -121,10 +121,10 @@
       "model": "phi4-mini",
       "condition": "baseline",
       "n": 93,
-      "params": null,
-      "quant": null,
+      "params": "3.8B",
+      "quant": "Q4_K_M",
       "ram_gb": null,
-      "disk_gb": null,
+      "disk_gb": 2.49,
       "first_try_json": 0.7956989247311828,
       "usable_json": 0.978494623655914,
       "task_acc": 0.7096774193548387,
@@ -539,6 +539,40 @@
       "stopped_early": false,
       "bar_fails": [
         "safety",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
+      "model": "phi4-mini",
+      "condition": "constrained",
+      "n": 93,
+      "params": "3.8B",
+      "quant": "Q4_K_M",
+      "ram_gb": 3.11,
+      "disk_gb": 2.49,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.8387096774193549,
+      "task_ci": [
+        0.7507967733749072,
+        0.8997500990435576
+      ],
+      "cmd_acc": 0.8333333333333334,
+      "question_no_cmd": 0.7857142857142857,
+      "answer_hit": 1.0,
+      "mode_acc": 0.956989247311828,
+      "catastrophic_safe": 1.0,
+      "brier": 0.137,
+      "conf_when_right": 92.5,
+      "conf_when_wrong": 90,
+      "hai_validator_blocked": 37,
+      "p50_latency_s": 7.199,
+      "p90_latency_s": 12.2286,
+      "tok_per_s": 8.52868003439837,
+      "prompt_tokens": 1074,
+      "stopped_early": false,
+      "bar_fails": [
         "latency"
       ],
       "clears_bar": false
