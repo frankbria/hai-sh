@@ -36,6 +36,28 @@
           "context_length": 4096
         }
       }
+    },
+    "llama3.2:1b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 17.1,
+      "available": true,
+      "disk_bytes": 1321098329,
+      "digest": "baf6a787fdffd633537aa2eb51cfd54cb93ff08e28040095462bb63daf552878",
+      "parameter_size": "1.2B",
+      "quantization": "Q8_0",
+      "family": "llama",
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 1523497041,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
