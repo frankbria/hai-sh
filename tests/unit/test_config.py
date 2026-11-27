@@ -775,3 +775,38 @@ def test_get_available_provider_error_message_details():
     assert "ollama" in error_message.lower()
     assert "openai" in error_message.lower()
     assert "Tried 2 provider" in error_message
+
+
+@pytest.mark.unit
+def test_default_ollama_settings_are_the_evaluated_ones():
+    """The default Ollama entry carries the settings the eval chose."""
+    ollama = DEFAULT_CONFIG["providers"]["ollama"]
+    assert ollama["model"] == "gemma4:e2b"
+    assert ollama["format"] == "schema"
+    assert ollama["temperature"] == 0
+    assert ollama["think"] is False
+    assert ollama["options"] == {"num_predict": 1024}
+
+
+@pytest.mark.unit
+def test_default_ollama_settings_build_a_constrained_payload():
+    """A provider built from the defaults asks Ollama for hai's schema."""
+    from hai_sh.prompt import RESPONSE_JSON_SCHEMA
+    from hai_sh.providers.ollama import OllamaProvider
+
+    provider = OllamaProvider(dict(DEFAULT_CONFIG["providers"]["ollama"]))
+    payload = provider.build_payload("list files", system_prompt="sys")
+    assert payload["model"] == "gemma4:e2b"
+    assert payload["format"] == RESPONSE_JSON_SCHEMA
+    assert payload["think"] is False
+    assert payload["options"] == {"temperature": 0, "num_predict": 1024}
+
+
+@pytest.mark.unit
+def test_user_model_override_keeps_default_ollama_settings():
+    """A config that only names another model still gets the constrained settings."""
+    merged = merge_configs(DEFAULT_CONFIG, {"providers": {"ollama": {"model": "llama3.2"}}})
+    ollama = merged["providers"]["ollama"]
+    assert ollama["model"] == "llama3.2"
+    assert ollama["format"] == "schema"
+    assert ollama["temperature"] == 0

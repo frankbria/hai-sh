@@ -409,8 +409,8 @@ providers:
   # Ollama Configuration (Local)
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"           # Model to use
-    # Install models: ollama pull llama3.2
+    model: "gemma4:e2b"         # Model to use
+    # Install models: ollama pull gemma4:e2b
 
 # Context Settings
 context:
@@ -466,9 +466,7 @@ Ollama provides free, local LLM access:
 
 3. **Pull a Model**:
    ```bash
-   ollama pull llama3.2
-   # or
-   ollama pull mistral
+   ollama pull gemma4:e2b
    ```
 
 4. **Test Ollama**:
@@ -484,7 +482,7 @@ Ollama provides free, local LLM access:
    providers:
      ollama:
        base_url: "http://localhost:11434"
-       model: "llama3.2"
+       model: "gemma4:e2b"
    ```
 
 ---
@@ -675,7 +673,7 @@ ollama serve
 ollama list
 
 # Pull a model if needed
-ollama pull llama3.2
+ollama pull gemma4:e2b
 
 # Test hai with Ollama
 hai "test ollama connection"
@@ -712,7 +710,7 @@ providers:
     model: "gpt-4o-mini"  # Faster than gpt-4
 
   ollama:
-    model: "mistral"  # Smaller than llama3.2
+    model: "qwen2.5-coder:1.5b"  # Smaller and faster, less accurate
 
 # Or use local Ollama for instant responses
 provider: "ollama"

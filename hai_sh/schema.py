@@ -5,7 +5,7 @@ This module defines the structure and validation rules for configuration files,
 as well as LLM response models for structured output parsing.
 """
 
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
@@ -143,8 +143,29 @@ class OllamaProviderConfig(BaseModel):
         description="Ollama API endpoint",
     )
     model: str = Field(
-        default="llama3.2",
+        default="gemma4:e2b",
         description="Ollama model to use",
+    )
+    format: Optional[Union[str, dict[str, Any]]] = Field(
+        default="schema",
+        description=(
+            'Structured-output constraint: "schema" (hai\'s response JSON '
+            'schema), "json" (any JSON), a JSON-schema dict, or null for none'
+        ),
+    )
+    temperature: float = Field(
+        default=0,
+        description="Sampling temperature",
+        ge=0,
+        le=2,
+    )
+    think: Optional[bool] = Field(
+        default=False,
+        description="Ollama think flag for reasoning models; null leaves it unset",
+    )
+    options: Optional[dict[str, Any]] = Field(
+        default_factory=lambda: {"num_predict": 1024},
+        description="Extra Ollama options (seed, num_ctx, num_predict, ...)",
     )
 
     @field_validator("base_url")

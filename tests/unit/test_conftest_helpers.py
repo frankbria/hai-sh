@@ -78,8 +78,8 @@ class TestIsOllamaModelAvailable:
 class TestOllamaTestModelEnvVar:
     """Tests for HAI_TEST_OLLAMA_MODEL environment variable support."""
 
-    def test_defaults_to_llama32(self):
-        """OLLAMA_TEST_MODEL defaults to llama3.2 when env var is not set."""
+    def test_defaults_to_hai_default_model(self):
+        """OLLAMA_TEST_MODEL defaults to hai's default model when env var is not set."""
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("HAI_TEST_OLLAMA_MODEL", None)
             # Re-import to pick up the env var change
@@ -87,7 +87,7 @@ class TestOllamaTestModelEnvVar:
             import tests.conftest as conftest_module
 
             importlib.reload(conftest_module)
-            assert conftest_module.OLLAMA_TEST_MODEL == "llama3.2"
+            assert conftest_module.OLLAMA_TEST_MODEL == "gemma4:e2b"
 
     def test_reads_from_env_var(self):
         """OLLAMA_TEST_MODEL reads from HAI_TEST_OLLAMA_MODEL env var."""

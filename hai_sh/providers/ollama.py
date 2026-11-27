@@ -17,6 +17,12 @@ except ImportError:
     REQUESTS_AVAILABLE = False
 
 
+# Default local model. Chosen by the eval in eval/ (2026-11-27): the smallest
+# model tested that clears every line of the bar in eval/README.md, with the
+# constrained settings in hai_sh.config.DEFAULT_CONFIG. Apache-2.0 licensed.
+DEFAULT_OLLAMA_MODEL = "gemma4:e2b"
+
+
 class OllamaProvider(BaseLLMProvider):
     """
     Ollama local model provider implementation.
@@ -27,7 +33,7 @@ class OllamaProvider(BaseLLMProvider):
     Example:
         >>> config = {
         ...     "base_url": "http://localhost:11434",
-        ...     "model": "llama3.2",
+        ...     "model": "gemma4:e2b",
         ...     "timeout": 60
         ... }
         >>> provider = OllamaProvider(config)
@@ -42,7 +48,7 @@ class OllamaProvider(BaseLLMProvider):
         Args:
             config: Configuration dictionary with:
                 - base_url: Ollama API URL (default: "http://localhost:11434")
-                - model: Model name (default: "llama3.2")
+                - model: Model name (default: "gemma4:e2b")
                 - timeout: Request timeout in seconds (default: 60)
                 - stream: Enable streaming (default: True)
                 - temperature: Sampling temperature (default: 0.7)
@@ -72,7 +78,7 @@ class OllamaProvider(BaseLLMProvider):
 
         # Store configuration
         self.base_url = self.config.get("base_url", "http://localhost:11434").rstrip("/")
-        self.model = self.config.get("model", "llama3.2")
+        self.model = self.config.get("model", DEFAULT_OLLAMA_MODEL)
         self.timeout = self.config.get("timeout", 60)
         self.stream = self.config.get("stream", True)
         self.temperature = self.config.get("temperature", 0.7)
@@ -169,6 +175,16 @@ class OllamaProvider(BaseLLMProvider):
             # Make API request
             response = requests.post(url, json=payload, timeout=self.timeout, stream=self.stream)
 
+            # A model without the "thinking" capability may reject the think
+            # flag. hai's defaults send think=false, so drop the flag for this
+            # model and retry once instead of failing.
+            if self._rejects_think(response, payload):
+                self.think = None
+                payload.pop("think", None)
+                response = requests.post(
+                    url, json=payload, timeout=self.timeout, stream=self.stream
+                )
+
             # Check for HTTP errors
             response.raise_for_status()
 
@@ -190,6 +206,19 @@ class OllamaProvider(BaseLLMProvider):
             raise RuntimeError(f"Ollama request failed: {e}")
         except Exception as e:
             raise RuntimeError(f"Unexpected error calling Ollama: {e}")
+
+    @staticmethod
+    def _rejects_think(response: Any, payload: dict[str, Any]) -> bool:
+        """True if Ollama refused the request because of the think flag."""
+        if "think" not in payload:
+            return False
+        if getattr(response, "status_code", None) != 400:
+            return False
+        try:
+            body = response.text or ""
+        except Exception:
+            return False
+        return "think" in body.lower()
 
     def validate_config(self, config: dict[str, Any]) -> bool:
         """

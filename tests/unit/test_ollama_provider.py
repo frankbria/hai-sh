@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import Mock, patch, MagicMock
 
 import pytest
+import requests
 
 from hai_sh.providers.ollama import OllamaProvider, REQUESTS_AVAILABLE
 
@@ -155,7 +156,7 @@ def test_provider_initialization_defaults(minimal_config):
     provider = OllamaProvider(minimal_config)
 
     assert provider.base_url == "http://localhost:11434"
-    assert provider.model == "llama3.2"
+    assert provider.model == "gemma4:e2b"
     assert provider.timeout == 60
     assert provider.stream is True
     assert provider.temperature == 0.7
@@ -747,3 +748,57 @@ def test_build_payload_schema_format_appends_no_command_hint():
     assert payload["prompt"].startswith(f"SYS\n\n{RESPONSE_SCHEMA_HINT}")
     plain = OllamaProvider({}).build_payload("what is a pid", None, "SYS")
     assert RESPONSE_SCHEMA_HINT not in plain["prompt"]
+
+
+# ============================================================================
+# think flag fallback
+# ============================================================================
+
+
+def _http_response(status, text="", body=None):
+    resp = MagicMock()
+    resp.status_code = status
+    resp.text = text
+    if status >= 400:
+        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status}")
+    else:
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = body or {"response": "ok", "done": True}
+    return resp
+
+
+@pytest.mark.unit
+@patch("hai_sh.providers.ollama.requests.post")
+def test_generate_retries_without_think_when_model_rejects_it(mock_post):
+    """A model without thinking support gets the request again, minus think."""
+    replies = [
+        _http_response(400, '{"error":"\\"llama3.2\\" does not support thinking"}'),
+        _http_response(200, body={"response": "ok", "done": True}),
+    ]
+    sent = []
+
+    def fake_post(url, json, **kwargs):
+        sent.append(dict(json))
+        return replies[len(sent) - 1]
+
+    mock_post.side_effect = fake_post
+    provider = OllamaProvider({"model": "llama3.2", "think": False, "stream": False})
+
+    assert provider.generate("list files") == "ok"
+    assert len(sent) == 2
+    assert sent[0]["think"] is False
+    assert "think" not in sent[1]
+    # Later requests leave the flag off.
+    assert "think" not in provider.build_payload("x")
+
+
+@pytest.mark.unit
+@patch("hai_sh.providers.ollama.requests.post")
+def test_generate_does_not_retry_other_400s(mock_post):
+    """Only a refusal that mentions think triggers the retry."""
+    mock_post.return_value = _http_response(400, '{"error":"model not found"}')
+    provider = OllamaProvider({"model": "nope", "think": False, "stream": False})
+
+    with pytest.raises(RuntimeError):
+        provider.generate("list files")
+    assert mock_post.call_count == 1

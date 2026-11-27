@@ -223,7 +223,7 @@ class TestOllamaModelAvailability:
     """Test model availability handling."""
 
     def test_default_model_available(self, test_config_ollama):
-        """Test that the default model (llama3.2) works if available."""
+        """Test that the default model (gemma4:e2b) works if available."""
         stdout, _stderr, exit_code = run_hai(
             "list files",
             test_config_ollama,

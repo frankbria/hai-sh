@@ -38,7 +38,15 @@ DEFAULT_CONFIG = {
         },
         "ollama": {
             "base_url": "http://localhost:11434",
-            "model": "llama3.2",
+            "model": "gemma4:e2b",
+            # Constrained decoding: Ollama must return hai's response JSON
+            # schema. With temperature 0 and thinking off, this is the
+            # setting under which the default model was chosen (see eval/).
+            "format": "schema",
+            "temperature": 0,
+            "think": False,
+            # Stops a model that falls into a repetition loop.
+            "options": {"num_predict": 1024},
         },
     },
     "context": {

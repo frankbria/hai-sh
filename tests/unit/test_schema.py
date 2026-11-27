@@ -85,7 +85,11 @@ def test_ollama_provider_config_defaults():
     config = OllamaProviderConfig()
 
     assert config.base_url == "http://localhost:11434"
-    assert config.model == "llama3.2"
+    assert config.model == "gemma4:e2b"
+    assert config.format == "schema"
+    assert config.temperature == 0
+    assert config.think is False
+    assert config.options == {"num_predict": 1024}
 
 
 @pytest.mark.unit
@@ -160,7 +164,7 @@ def test_providers_config_defaults():
     assert config.anthropic is not None
     assert config.anthropic.model == "claude-sonnet-4-5"
     assert config.ollama is not None
-    assert config.ollama.model == "llama3.2"
+    assert config.ollama.model == "gemma4:e2b"
     assert config.local is None
 
 

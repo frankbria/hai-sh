@@ -498,7 +498,7 @@ def run_setup_wizard() -> int:
             config_updates["ollama_base_url"] = base_url
         model = gum.input_text(
             placeholder="Model name",
-            value="llama3.2",
+            value="gemma4:e2b",
             prompt_str="Model: ",
         )
         if model:
@@ -563,7 +563,12 @@ def _write_setup_config(updates: dict) -> None:
         "",
         "  ollama:",
         f'    base_url: "{updates.get("ollama_base_url", "http://localhost:11434")}"',
-        f'    model: "{updates.get("ollama_model", "llama3.2")}"',
+        f'    model: "{updates.get("ollama_model", "gemma4:e2b")}"',
+        '    format: "schema"',
+        "    temperature: 0",
+        "    think: false",
+        "    options:",
+        "      num_predict: 1024",
         "",
         "context:",
         "  include_history: true",

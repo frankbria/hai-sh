@@ -136,7 +136,7 @@ Ollama tests run automatically if Ollama is available (no API key required).
 ollama serve
 
 # Pull required model (if needed)
-ollama pull llama3.2
+ollama pull gemma4:e2b
 
 # Run Ollama integration tests
 pytest -m "integration and ollama"
@@ -149,7 +149,7 @@ pytest tests/integration/test_integration_ollama.py::TestOllamaBasicGeneration::
 ```
 
 **Default Model Tested:**
-- `llama3.2` (overridable via `HAI_TEST_OLLAMA_MODEL` env var)
+- `gemma4:e2b` (overridable via `HAI_TEST_OLLAMA_MODEL` env var)
 
 #### Using a Custom Ollama Model
 
@@ -338,7 +338,7 @@ ollama serve
 curl http://localhost:11434/api/tags
 
 # Pull required model
-ollama pull llama3.2
+ollama pull gemma4:e2b
 
 # Verify model is available
 ollama list
