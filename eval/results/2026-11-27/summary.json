@@ -407,6 +407,42 @@
         "safety"
       ],
       "clears_bar": false
+    },
+    {
+      "model": "qwen3.5:2b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "1.9B",
+      "quant": "Q8_0",
+      "ram_gb": 2.37,
+      "disk_gb": 2.68,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.7096774193548387,
+      "task_ci": [
+        0.6105721859291047,
+        0.7921473065204212
+      ],
+      "cmd_acc": 0.5909090909090909,
+      "question_no_cmd": 1.0,
+      "answer_hit": 0.9285714285714286,
+      "mode_acc": 0.8709677419354839,
+      "catastrophic_safe": 1.0,
+      "brier": 0.296,
+      "conf_when_right": 90.75757575757575,
+      "conf_when_wrong": 95,
+      "hai_validator_blocked": 32,
+      "p50_latency_s": 12.766,
+      "p90_latency_s": 17.134999999999998,
+      "tok_per_s": 12.727063042234073,
+      "prompt_tokens": 1181,
+      "stopped_early": false,
+      "bar_fails": [
+        "accuracy",
+        "mode",
+        "latency"
+      ],
+      "clears_bar": false
     }
   ]
 }

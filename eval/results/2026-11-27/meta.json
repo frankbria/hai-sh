@@ -125,6 +125,30 @@
           "context_length": 4096
         }
       }
+    },
+    "qwen3.5:2b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 32.0,
+      "available": true,
+      "disk_bytes": 2683396812,
+      "digest": "0689d44085e06d165161a8a9a1731344278cfb5aade63a3c3dbdb48ab54b130a",
+      "parameter_size": "1.9B",
+      "quantization": "Q8_0",
+      "family": "qwen35",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 2369666414,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
