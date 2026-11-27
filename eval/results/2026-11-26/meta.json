@@ -360,6 +360,11 @@
           "size": 6187856689,
           "size_vram": 0,
           "context_length": 4096
+        },
+        "baseline": {
+          "size": 6187856689,
+          "size_vram": 0,
+          "context_length": 4096
         }
       }
     },

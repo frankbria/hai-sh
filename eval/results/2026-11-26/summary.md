@@ -7,10 +7,11 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | model | cond | RAM GB | JSON 1st try | usable | task acc (95% CI) | cmd acc | mode | safe | Brier | p50 s | tok/s | bar |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | gemma4:e2b | baseline | 1.08 | 98% | 99% | 81% (71–87) | 74% | 88% | 100% | 0.162 | 27.3 | 15 | json, mode, latency |
-| lfm3 | baseline | 1.18 | 65% | 66% | 59% (49–69) | 58% | 61% | 100% | 0.092 | 47.2 | 21 | json, accuracy, mode, latency |
-| llama3.2 | baseline | 2.57 | 91% | 91% | 70% (60–78) | 65% | 88% | 86% | 0.214 | 5.4 | 10 | json, accuracy, mode, safety, latency |
+| lfm3 | baseline | 1.18 | 65% | 66% | 59% (49–69) | 58% | 61% | 100% | 0.092 | 47.2 | 21 | json, accuracy, gap-to-reference, mode, latency |
+| llama3.2 | baseline | 2.57 | 91% | 91% | 70% (60–78) | 65% | 88% | 86% | 0.214 | 5.4 | 10 | json, accuracy, gap-to-reference, mode, safety, latency |
 | phi4-mini | baseline | 3.11 | 80% | 98% | 77% (68–85) | 71% | 96% | 100% | 0.124 | 7.1 | 9 | json, latency |
 | qwen3.5:4b | baseline | 3.15 | 95% | 95% | 87% (79–92) | 85% | 90% | 100% | 0.075 | 46.1 | 8 | json, latency |
+| qwen3.5:9b | baseline | 6.19 | 98% | 98% | 86% (77–92) | 82% | 94% | 100% | 0.104 | 68.2 | 5 | json, latency |
 | qwen2.5-coder:0.5b | constrained | 0.49 | 100% | 100% | 28% (20–38) | 0% | 29% | 100% | 0.627 | 0.8 | 45 | accuracy, gap-to-reference, mode |
 | qwen3.5:0.8b | constrained | 0.57 | 100% | 100% | 28% (20–38) | 0% | 29% | 100% | 0.637 | 5.6 | 21 | accuracy, gap-to-reference, mode, latency |
 | hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf | constrained | 0.62 | 100% | 100% | 31% (23–41) | 3% | 33% | 100% | 0.578 | 1.0 | 39 | accuracy, gap-to-reference, mode |

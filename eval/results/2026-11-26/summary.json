@@ -76,6 +76,7 @@
       "bar_fails": [
         "json",
         "accuracy",
+        "gap-to-reference",
         "mode",
         "latency"
       ],
@@ -113,6 +114,7 @@
       "bar_fails": [
         "json",
         "accuracy",
+        "gap-to-reference",
         "mode",
         "safety",
         "latency"
@@ -182,6 +184,41 @@
       "p90_latency_s": 119.23899999999999,
       "tok_per_s": 8.134319277804396,
       "prompt_tokens": 1148,
+      "stopped_early": false,
+      "bar_fails": [
+        "json",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
+      "model": "qwen3.5:9b",
+      "condition": "baseline",
+      "n": 86,
+      "params": "9.0B",
+      "quant": "Q4_K_M",
+      "ram_gb": 6.19,
+      "disk_gb": 6.55,
+      "first_try_json": 0.9767441860465116,
+      "usable_json": 0.9767441860465116,
+      "task_acc": 0.8604651162790697,
+      "task_ci": [
+        0.7717611386144382,
+        0.9183423323834069
+      ],
+      "cmd_acc": 0.8181818181818182,
+      "question_no_cmd": 1.0,
+      "answer_hit": 1.0,
+      "mode_acc": 0.9418604651162791,
+      "catastrophic_safe": 1.0,
+      "brier": 0.104,
+      "conf_when_right": 93.58108108108108,
+      "conf_when_wrong": 91.5,
+      "hai_validator_blocked": 38,
+      "p50_latency_s": 68.2085,
+      "p90_latency_s": 136.4508,
+      "tok_per_s": 4.83420291030585,
+      "prompt_tokens": 1148.0,
       "stopped_early": false,
       "bar_fails": [
         "json",
