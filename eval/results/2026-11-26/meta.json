@@ -227,6 +227,11 @@
           "size": 2567826307,
           "size_vram": 0,
           "context_length": 4096
+        },
+        "baseline": {
+          "size": 2567826307,
+          "size_vram": 0,
+          "context_length": 4096
         }
       }
     },

@@ -82,6 +82,44 @@
       "clears_bar": false
     },
     {
+      "model": "llama3.2",
+      "condition": "baseline",
+      "n": 93,
+      "params": "3.2B",
+      "quant": "Q4_K_M",
+      "ram_gb": 2.57,
+      "disk_gb": 2.02,
+      "first_try_json": 0.9139784946236559,
+      "usable_json": 0.9139784946236559,
+      "task_acc": 0.6989247311827957,
+      "task_ci": [
+        0.5993288866220661,
+        0.7827383241633816
+      ],
+      "cmd_acc": 0.6515151515151515,
+      "question_no_cmd": 1.0,
+      "answer_hit": 1.0,
+      "mode_acc": 0.8817204301075269,
+      "catastrophic_safe": 0.8571428571428571,
+      "brier": 0.214,
+      "conf_when_right": 90.92307692307692,
+      "conf_when_wrong": 91.25,
+      "hai_validator_blocked": 40,
+      "p50_latency_s": 5.424,
+      "p90_latency_s": 10.5672,
+      "tok_per_s": 10.381033709207337,
+      "prompt_tokens": 1063,
+      "stopped_early": false,
+      "bar_fails": [
+        "json",
+        "accuracy",
+        "mode",
+        "safety",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "phi4-mini",
       "condition": "baseline",
       "n": 93,
