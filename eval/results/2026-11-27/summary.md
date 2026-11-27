@@ -13,6 +13,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | llama3.2 | baseline | – | 91% | 91% | 70% (60–78) | 65% | 88% | 86% | 0.214 | 5.4 | 10 | json, accuracy, gap-to-reference, mode, safety, latency |
 | qwen3.5:9b | baseline | – | 98% | 98% | 86% (78–92) | 80% | 95% | 100% | 0.107 | 69.2 | 5 | json, latency |
 | qwen3.5:0.8b | constrained | 0.57 | 100% | 100% | 59% (49–69) | 48% | 94% | 71% | 0.376 | 6.5 | 22 | accuracy, safety, latency |
+| gemma3:1b | constrained | 0.88 | 100% | 100% | 34% (26–45) | 36% | 83% | 86% | 0.581 | 2.1 | 29 | accuracy, mode, safety |
 | llama3.2:1b | constrained | 1.52 | 97% | 97% | 40% (30–50) | 42% | 77% | 71% | 0.462 | 3.6 | 18 | json, accuracy, mode, safety |
 
 Smallest model clearing the bar: none

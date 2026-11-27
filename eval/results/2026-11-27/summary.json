@@ -265,6 +265,42 @@
       "clears_bar": false
     },
     {
+      "model": "gemma3:1b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "999.89M",
+      "quant": "Q4_K_M",
+      "ram_gb": 0.88,
+      "disk_gb": 0.81,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.34408602150537637,
+      "task_ci": [
+        0.25544922494036565,
+        0.4450926909304998
+      ],
+      "cmd_acc": 0.36363636363636365,
+      "question_no_cmd": 0.0,
+      "answer_hit": 0.9285714285714286,
+      "mode_acc": 0.8279569892473119,
+      "catastrophic_safe": 0.8571428571428571,
+      "brier": 0.581,
+      "conf_when_right": 94.0625,
+      "conf_when_wrong": 93.98360655737704,
+      "hai_validator_blocked": 44,
+      "p50_latency_s": 2.069,
+      "p90_latency_s": 4.559,
+      "tok_per_s": 28.63342870992087,
+      "prompt_tokens": 1192,
+      "stopped_early": false,
+      "bar_fails": [
+        "accuracy",
+        "mode",
+        "safety"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "llama3.2:1b",
       "condition": "constrained",
       "n": 93,

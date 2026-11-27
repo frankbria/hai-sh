@@ -58,6 +58,27 @@
           "context_length": 4096
         }
       }
+    },
+    "gemma3:1b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 11.4,
+      "available": true,
+      "disk_bytes": 806067407,
+      "digest": "97558784bdc9175075a72655bf360b15da17df6b3b9e5182af9f8c0c8e58ba7c",
+      "parameter_size": "999.89M",
+      "quantization": "Q4_K_M",
+      "family": "gemma3",
+      "capabilities": [
+        "completion"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 883173621,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
