@@ -102,6 +102,29 @@
           "context_length": 4096
         }
       }
+    },
+    "lfm3": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 14.3,
+      "available": true,
+      "disk_bytes": 1099638680,
+      "digest": "b36a103fe2f8fbe9df2ceec88b9cfdf842dc04aaabe2b4677d1acf8e16570b5d",
+      "parameter_size": "1.7B",
+      "quantization": "Q4_K_M",
+      "family": "lfm3",
+      "capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 1177771047,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
