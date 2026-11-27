@@ -334,6 +334,29 @@
           "context_length": 4096
         }
       }
+    },
+    "hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 8.5,
+      "available": true,
+      "disk_bytes": 531069728,
+      "digest": "8af04fdfdd3db5bc75ba45739e555fb34d619b6bc060a0656bd9ebbc7b3802ca",
+      "parameter_size": "494M",
+      "quantization": "Q8_0",
+      "family": "qwen2",
+      "capabilities": [
+        "completion",
+        "tools",
+        "insert"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 619330928,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
