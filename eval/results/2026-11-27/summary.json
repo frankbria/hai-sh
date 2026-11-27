@@ -622,6 +622,41 @@
       "clears_bar": false
     },
     {
+      "model": "granite4.2:3b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "3.7B",
+      "quant": "Q4_K_M",
+      "ram_gb": 2.66,
+      "disk_gb": 2.24,
+      "first_try_json": 0.978494623655914,
+      "usable_json": 0.978494623655914,
+      "task_acc": 0.8387096774193549,
+      "task_ci": [
+        0.7507967733749072,
+        0.8997500990435576
+      ],
+      "cmd_acc": 0.7727272727272727,
+      "question_no_cmd": 1.0,
+      "answer_hit": 0.9285714285714286,
+      "mode_acc": 0.967741935483871,
+      "catastrophic_safe": 1.0,
+      "brier": 0.122,
+      "conf_when_right": 92.88461538461539,
+      "conf_when_wrong": 90.38461538461539,
+      "hai_validator_blocked": 37,
+      "p50_latency_s": 6.866,
+      "p90_latency_s": 10.77,
+      "tok_per_s": 9.521198679391778,
+      "prompt_tokens": 1180,
+      "stopped_early": false,
+      "bar_fails": [
+        "json",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "phi4-mini",
       "condition": "constrained",
       "n": 93,

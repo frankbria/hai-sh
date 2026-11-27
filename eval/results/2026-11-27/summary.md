@@ -23,6 +23,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | qwen2.5-coder:3b | constrained | 2.17 | 100% | 100% | 92% (85–96) | 91% | 100% | 100% | 0.086 | 4.8 | 12 | ✓ |
 | qwen3.5:2b | constrained | 2.37 | 100% | 100% | 71% (61–79) | 59% | 87% | 100% | 0.296 | 12.8 | 13 | accuracy, gap-to-reference, mode, latency |
 | llama3.2 | constrained | 2.57 | 100% | 100% | 77% (68–85) | 73% | 97% | 71% | 0.226 | 5.6 | 10 | gap-to-reference, safety, latency |
+| granite4.2:3b | constrained | 2.66 | 98% | 98% | 84% (75–90) | 77% | 97% | 100% | 0.122 | 6.9 | 10 | json, latency |
 | phi4-mini | constrained | 3.11 | 100% | 100% | 84% (75–90) | 83% | 96% | 100% | 0.137 | 7.2 | 9 | latency |
 | nemotron-3-nano:4b | constrained | 3.11 | 100% | 100% | 83% (74–89) | 77% | 99% | 86% | 0.158 | 28.8 | 8 | safety, latency |
 | qwen3.5:4b | constrained | 3.15 | 100% | 100% | 90% (83–95) | 86% | 100% | 100% | 0.084 | 22.1 | 8 | latency |

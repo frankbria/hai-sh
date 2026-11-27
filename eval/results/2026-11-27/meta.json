@@ -357,6 +357,29 @@
           "context_length": 4096
         }
       }
+    },
+    "granite4.2:3b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 26.6,
+      "available": true,
+      "disk_bytes": 2244023965,
+      "digest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4",
+      "parameter_size": "3.7B",
+      "quantization": "Q4_K_M",
+      "family": "granite",
+      "capabilities": [
+        "tools",
+        "thinking",
+        "completion"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 2657144010,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
