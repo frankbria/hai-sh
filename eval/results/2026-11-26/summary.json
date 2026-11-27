@@ -45,6 +45,43 @@
       "clears_bar": false
     },
     {
+      "model": "lfm3",
+      "condition": "baseline",
+      "n": 93,
+      "params": "1.7B",
+      "quant": "Q4_K_M",
+      "ram_gb": 1.18,
+      "disk_gb": 1.1,
+      "first_try_json": 0.6451612903225806,
+      "usable_json": 0.6559139784946236,
+      "task_acc": 0.5913978494623656,
+      "task_ci": [
+        0.4897977403042717,
+        0.6857466538403933
+      ],
+      "cmd_acc": 0.5757575757575758,
+      "question_no_cmd": 0.9285714285714286,
+      "answer_hit": 1.0,
+      "mode_acc": 0.6129032258064516,
+      "catastrophic_safe": 1.0,
+      "brier": 0.092,
+      "conf_when_right": 95.21818181818182,
+      "conf_when_wrong": 93,
+      "hai_validator_blocked": 28,
+      "p50_latency_s": 47.168,
+      "p90_latency_s": 57.6736,
+      "tok_per_s": 20.591126456647448,
+      "prompt_tokens": 1077,
+      "stopped_early": false,
+      "bar_fails": [
+        "json",
+        "accuracy",
+        "mode",
+        "latency"
+      ],
+      "clears_bar": false
+    },
+    {
       "model": "qwen3.5:4b",
       "condition": "baseline",
       "n": 93,
