@@ -12,6 +12,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | phi4-mini | baseline | – | 80% | 98% | 71% (61–79) | 62% | 96% | 100% | 0.177 | 7.1 | 9 | json, accuracy, gap-to-reference, latency |
 | llama3.2 | baseline | – | 91% | 91% | 70% (60–78) | 65% | 88% | 86% | 0.214 | 5.4 | 10 | json, accuracy, gap-to-reference, mode, safety, latency |
 | qwen3.5:9b | baseline | – | 98% | 98% | 86% (78–92) | 80% | 95% | 100% | 0.107 | 69.2 | 5 | json, latency |
+| qwen2.5-coder:0.5b | constrained | 0.49 | 100% | 100% | 53% (43–63) | 62% | 81% | 43% | 0.403 | 1.2 | 45 | accuracy, gap-to-reference, mode, safety |
 | qwen3.5:0.8b | constrained | 0.57 | 100% | 100% | 59% (49–69) | 48% | 94% | 71% | 0.376 | 6.5 | 22 | accuracy, gap-to-reference, safety, latency |
 | hf.co/burhan2753y/qwen2.5-coder-0.5b-nl2bash-gguf | constrained | 0.62 | 100% | 100% | 57% (47–67) | 65% | 82% | 57% | 0.362 | 1.3 | 38 | accuracy, gap-to-reference, mode, safety |
 | gemma3:1b | constrained | 0.88 | 100% | 100% | 34% (26–45) | 36% | 83% | 86% | 0.581 | 2.1 | 29 | accuracy, gap-to-reference, mode, safety |
