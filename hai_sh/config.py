@@ -117,7 +117,7 @@ def expand_env_vars(value: str) -> str:
         return value
 
     # Pattern matches ${VAR} or $VAR
-    pattern = r'\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)'
+    pattern = r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)"
 
     def replace_var(match):
         var_name = match.group(1) or match.group(2)
@@ -488,8 +488,7 @@ def get_provider_priority_list(config: dict) -> list[str]:
 
 
 def check_provider_availability(
-    provider_name: str,
-    provider_config: dict
+    provider_name: str, provider_config: dict
 ) -> tuple[bool, Optional[Any], Optional[str]]:
     """
     Check if a provider is available and return details.
@@ -522,7 +521,7 @@ def check_provider_availability(
         provider = get_provider(provider_name, provider_config)
 
         # Check availability using detailed method if available
-        if hasattr(provider, 'check_availability'):
+        if hasattr(provider, "check_availability"):
             available, error = provider.check_availability()
             if available:
                 return True, provider, None
@@ -556,12 +555,7 @@ class ProviderFallbackResult:
     Contains the selected provider and information about failed attempts.
     """
 
-    def __init__(
-        self,
-        provider: Any,
-        provider_name: str,
-        failed_providers: list[tuple[str, str]]
-    ):
+    def __init__(self, provider: Any, provider_name: str, failed_providers: list[tuple[str, str]]):
         """
         Initialize fallback result.
 
@@ -581,9 +575,7 @@ class ProviderFallbackResult:
 
 
 def get_available_provider(
-    config: dict,
-    debug_mode: bool = False,
-    on_fallback: Optional[callable] = None
+    config: dict, debug_mode: bool = False, on_fallback: Optional[callable] = None
 ) -> ProviderFallbackResult:
     """
     Get the first available provider from the priority chain.
@@ -628,18 +620,14 @@ def get_available_provider(
         if debug_mode:
             print(f"Debug: Trying provider '{provider_name}'...", file=sys.stderr)
 
-        success, provider, error = check_provider_availability(
-            provider_name, provider_config
-        )
+        success, provider, error = check_provider_availability(provider_name, provider_config)
 
         if success:
             if debug_mode:
                 print(f"Debug: Using provider '{provider_name}'", file=sys.stderr)
 
             return ProviderFallbackResult(
-                provider=provider,
-                provider_name=provider_name,
-                failed_providers=failed_providers
+                provider=provider, provider_name=provider_name, failed_providers=failed_providers
             )
         else:
             failed_providers.append((provider_name, error))
@@ -650,15 +638,10 @@ def get_available_provider(
                 on_fallback(provider_name, error, next_provider)
 
             if debug_mode:
-                print(
-                    f"Debug: Provider '{provider_name}' unavailable: {error}",
-                    file=sys.stderr
-                )
+                print(f"Debug: Provider '{provider_name}' unavailable: {error}", file=sys.stderr)
 
     # All providers failed
-    error_details = "\n".join(
-        f"  - {name}: {error}" for name, error in failed_providers
-    )
+    error_details = "\n".join(f"  - {name}: {error}" for name, error in failed_providers)
     raise ConfigError(
         f"No providers available. Tried {len(provider_list)} provider(s):\n{error_details}\n"
         f"Check your configuration and ensure at least one provider is properly configured."

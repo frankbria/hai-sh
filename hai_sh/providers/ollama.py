@@ -11,6 +11,7 @@ from hai_sh.providers.base import BaseLLMProvider
 
 try:
     import requests
+
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
@@ -91,6 +92,7 @@ class OllamaProvider(BaseLLMProvider):
             return None
         if self.format == "schema":
             from hai_sh.prompt import RESPONSE_JSON_SCHEMA
+
             return RESPONSE_JSON_SCHEMA
         return self.format
 
@@ -98,7 +100,7 @@ class OllamaProvider(BaseLLMProvider):
         self,
         prompt: str,
         context: Optional[dict[str, Any]] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Build the JSON body for Ollama's /api/generate.
@@ -110,6 +112,7 @@ class OllamaProvider(BaseLLMProvider):
         """
         if self.format == "schema" and system_prompt and system_prompt.strip():
             from hai_sh.prompt import RESPONSE_SCHEMA_HINT
+
             system_prompt = f"{system_prompt.rstrip()}\n\n{RESPONSE_SCHEMA_HINT}"
 
         if self.system_field and system_prompt and system_prompt.strip():
@@ -142,7 +145,7 @@ class OllamaProvider(BaseLLMProvider):
         self,
         prompt: str,
         context: Optional[dict[str, Any]] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ) -> str:
         """
         Generate a response using Ollama's API.
@@ -164,12 +167,7 @@ class OllamaProvider(BaseLLMProvider):
             payload = self.build_payload(prompt, context, system_prompt)
 
             # Make API request
-            response = requests.post(
-                url,
-                json=payload,
-                timeout=self.timeout,
-                stream=self.stream
-            )
+            response = requests.post(url, json=payload, timeout=self.timeout, stream=self.stream)
 
             # Check for HTTP errors
             response.raise_for_status()
@@ -182,8 +180,7 @@ class OllamaProvider(BaseLLMProvider):
 
         except requests.exceptions.ConnectionError as e:
             raise RuntimeError(
-                f"Cannot connect to Ollama at {self.base_url}. "
-                f"Is Ollama running? Error: {e}"
+                f"Cannot connect to Ollama at {self.base_url}. " f"Is Ollama running? Error: {e}"
             )
         except requests.exceptions.Timeout as e:
             raise RuntimeError(f"Ollama request timed out after {self.timeout}s: {e}")
@@ -283,7 +280,7 @@ class OllamaProvider(BaseLLMProvider):
         self,
         prompt: str,
         context: Optional[dict[str, Any]] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ) -> str:
         """
         Format prompt with optional system prompt and context.
@@ -384,6 +381,4 @@ class OllamaProvider(BaseLLMProvider):
     def _record_metrics(self, data: Any) -> None:
         """Keep Ollama's timing and token counts from a final response."""
         if isinstance(data, dict):
-            self.last_metrics = {
-                k: data[k] for k in self._METRIC_KEYS if k in data
-            }
+            self.last_metrics = {k: data[k] for k in self._METRIC_KEYS if k in data}

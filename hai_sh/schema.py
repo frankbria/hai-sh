@@ -369,8 +369,8 @@ class HaiConfig(BaseModel):
     provider_priority: Optional[List[Literal["openai", "anthropic", "ollama", "local"]]] = Field(
         default=None,
         description="Ordered list of providers to try for fallback support. "
-                    "If set, overrides the 'provider' field. Providers are tried "
-                    "in order until one is available.",
+        "If set, overrides the 'provider' field. Providers are tried "
+        "in order until one is available.",
     )
     providers: ProvidersConfig = Field(
         default_factory=ProvidersConfig,
@@ -428,9 +428,7 @@ class HaiConfig(BaseModel):
             # Fall back to single provider validation
             provider_config = getattr(self.providers, self.provider, None)
             if provider_config is None:
-                raise ValueError(
-                    f"Provider '{self.provider}' is selected but has no configuration"
-                )
+                raise ValueError(f"Provider '{self.provider}' is selected but has no configuration")
 
     def get_provider_list(self) -> List[str]:
         """

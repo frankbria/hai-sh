@@ -620,10 +620,7 @@ def test_check_provider_availability_missing_provider():
 def test_check_provider_availability_invalid_config():
     """Test check_provider_availability with invalid config."""
     # OpenAI requires API key starting with sk-
-    success, provider, error = check_provider_availability(
-        "openai",
-        {"api_key": "invalid-key"}
-    )
+    success, provider, error = check_provider_availability("openai", {"api_key": "invalid-key"})
     assert success is False
     assert provider is None
     assert error is not None
@@ -634,8 +631,7 @@ def test_check_provider_availability_ollama_not_running():
     """Test check_provider_availability with unavailable Ollama."""
     # Use a port that shouldn't have Ollama running
     success, provider, error = check_provider_availability(
-        "ollama",
-        {"base_url": "http://localhost:99999", "model": "test"}
+        "ollama", {"base_url": "http://localhost:99999", "model": "test"}
     )
     assert success is False
     assert provider is None
@@ -650,9 +646,7 @@ def test_check_provider_availability_ollama_not_running():
 def test_provider_fallback_result_no_fallback():
     """Test ProviderFallbackResult when no fallback occurred."""
     result = ProviderFallbackResult(
-        provider="mock_provider",
-        provider_name="ollama",
-        failed_providers=[]
+        provider="mock_provider", provider_name="ollama", failed_providers=[]
     )
     assert result.had_fallback is False
     assert result.provider_name == "ollama"
@@ -666,7 +660,7 @@ def test_provider_fallback_result_with_fallback():
         provider_name="openai",
         failed_providers=[
             ("ollama", "Cannot connect to Ollama"),
-        ]
+        ],
     )
     assert result.had_fallback is True
     assert result.provider_name == "openai"
@@ -682,7 +676,7 @@ def test_provider_fallback_result_multiple_failures():
         failed_providers=[
             ("ollama", "Cannot connect to Ollama"),
             ("openai", "Invalid API key"),
-        ]
+        ],
     )
     assert result.had_fallback is True
     assert result.provider_name == "anthropic"
@@ -702,7 +696,7 @@ def test_get_available_provider_all_fail():
                 "base_url": "http://localhost:99999",  # Invalid port
                 "model": "test",
             }
-        }
+        },
     }
     with pytest.raises(ConfigError, match="No providers available"):
         get_available_provider(config)
@@ -718,7 +712,7 @@ def test_get_available_provider_single_provider_fails():
                 "base_url": "http://localhost:99999",  # Invalid port
                 "model": "test",
             }
-        }
+        },
     }
     with pytest.raises(ConfigError, match="No providers available"):
         get_available_provider(config)
@@ -741,8 +735,8 @@ def test_get_available_provider_callback_called():
             },
             "openai": {
                 "api_key": "invalid",  # Will fail validation
-            }
-        }
+            },
+        },
     }
 
     # Both should fail, but callback should be called when first fails
@@ -769,8 +763,8 @@ def test_get_available_provider_error_message_details():
             },
             "openai": {
                 "api_key": "invalid",
-            }
-        }
+            },
+        },
     }
 
     with pytest.raises(ConfigError) as exc_info:

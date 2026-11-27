@@ -12,10 +12,7 @@ from hai_sh.providers.ollama import OllamaProvider, REQUESTS_AVAILABLE
 
 
 # Skip all tests if requests is not installed
-pytestmark = pytest.mark.skipif(
-    not REQUESTS_AVAILABLE,
-    reason="requests package not installed"
-)
+pytestmark = pytest.mark.skipif(not REQUESTS_AVAILABLE, reason="requests package not installed")
 
 
 @pytest.fixture
@@ -26,7 +23,7 @@ def valid_config():
         "model": "llama3.2",
         "timeout": 60,
         "stream": True,
-        "temperature": 0.7
+        "temperature": 0.7,
     }
 
 
@@ -39,11 +36,7 @@ def minimal_config():
 @pytest.fixture
 def non_streaming_config():
     """Configuration with streaming disabled."""
-    return {
-        "base_url": "http://localhost:11434",
-        "model": "llama3.2",
-        "stream": False
-    }
+    return {"base_url": "http://localhost:11434", "model": "llama3.2", "stream": False}
 
 
 # ============================================================================
@@ -83,7 +76,9 @@ def test_validate_config_invalid_base_url():
     assert provider.validate_config({"base_url": ""}) is False
     assert provider.validate_config({"base_url": "   "}) is False
     assert provider.validate_config({"base_url": "localhost:11434"}) is False  # No protocol
-    assert provider.validate_config({"base_url": "ftp://localhost:11434"}) is False  # Wrong protocol
+    assert (
+        provider.validate_config({"base_url": "ftp://localhost:11434"}) is False
+    )  # Wrong protocol
     assert provider.validate_config({"base_url": 123}) is False
 
 
@@ -188,7 +183,7 @@ def test_provider_name():
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.get')
+@patch("hai_sh.providers.ollama.requests.get")
 def test_is_available_when_running(mock_get):
     """Test is_available returns True when Ollama is running."""
     provider = OllamaProvider({})
@@ -203,7 +198,7 @@ def test_is_available_when_running(mock_get):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.get')
+@patch("hai_sh.providers.ollama.requests.get")
 def test_is_available_when_not_running(mock_get):
     """Test is_available returns False when Ollama is not running."""
     provider = OllamaProvider({})
@@ -215,7 +210,7 @@ def test_is_available_when_not_running(mock_get):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.get')
+@patch("hai_sh.providers.ollama.requests.get")
 def test_is_available_with_custom_base_url(mock_get):
     """Test is_available uses custom base URL."""
     provider = OllamaProvider({"base_url": "http://192.168.1.100:11434"})
@@ -235,7 +230,7 @@ def test_is_available_with_custom_base_url(mock_get):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_streaming_simple_prompt(mock_post, valid_config):
     """Test generate with streaming enabled."""
     provider = OllamaProvider(valid_config)
@@ -243,10 +238,9 @@ def test_generate_streaming_simple_prompt(mock_post, valid_config):
     # Mock streaming response
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "ls", "done": false}',
-        b'{"response": " -la", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(
+        return_value=[b'{"response": "ls", "done": false}', b'{"response": " -la", "done": true}']
+    )
     mock_post.return_value = mock_response
 
     response = provider.generate("List files")
@@ -254,12 +248,12 @@ def test_generate_streaming_simple_prompt(mock_post, valid_config):
     assert response == "ls -la"
     mock_post.assert_called_once()
     call_args = mock_post.call_args
-    assert call_args.kwargs['json']['model'] == 'llama3.2'
-    assert call_args.kwargs['json']['stream'] is True
+    assert call_args.kwargs["json"]["model"] == "llama3.2"
+    assert call_args.kwargs["json"]["stream"] is True
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_streaming_with_context(mock_post, valid_config):
     """Test generate with streaming and context."""
     provider = OllamaProvider(valid_config)
@@ -267,14 +261,12 @@ def test_generate_streaming_with_context(mock_post, valid_config):
     context = {
         "cwd": "/home/user/project",
         "git": {"is_repo": True, "branch": "main", "has_changes": False},
-        "env": {"user": "testuser", "shell": "/bin/bash"}
+        "env": {"user": "testuser", "shell": "/bin/bash"},
     }
 
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "git status", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(return_value=[b'{"response": "git status", "done": true}'])
     mock_post.return_value = mock_response
 
     response = provider.generate("Check status", context=context)
@@ -283,25 +275,27 @@ def test_generate_streaming_with_context(mock_post, valid_config):
 
     # Verify context was included in prompt
     call_args = mock_post.call_args
-    prompt = call_args.kwargs['json']['prompt']
+    prompt = call_args.kwargs["json"]["prompt"]
     assert "/home/user/project" in prompt
     assert "main" in prompt
     assert "testuser" in prompt
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_streaming_empty_lines(mock_post, valid_config):
     """Test generate handles empty lines in streaming response."""
     provider = OllamaProvider(valid_config)
 
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "test", "done": false}',
-        b'',  # Empty line
-        b'{"response": " response", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(
+        return_value=[
+            b'{"response": "test", "done": false}',
+            b"",  # Empty line
+            b'{"response": " response", "done": true}',
+        ]
+    )
     mock_post.return_value = mock_response
 
     response = provider.generate("test")
@@ -310,18 +304,20 @@ def test_generate_streaming_empty_lines(mock_post, valid_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_streaming_invalid_json(mock_post, valid_config):
     """Test generate handles invalid JSON in streaming response."""
     provider = OllamaProvider(valid_config)
 
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "valid", "done": false}',
-        b'invalid json',
-        b'{"response": " response", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(
+        return_value=[
+            b'{"response": "valid", "done": false}',
+            b"invalid json",
+            b'{"response": " response", "done": true}',
+        ]
+    )
     mock_post.return_value = mock_response
 
     response = provider.generate("test")
@@ -336,7 +332,7 @@ def test_generate_streaming_invalid_json(mock_post, valid_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_non_streaming(mock_post, non_streaming_config):
     """Test generate with streaming disabled."""
     provider = OllamaProvider(non_streaming_config)
@@ -350,7 +346,7 @@ def test_generate_non_streaming(mock_post, non_streaming_config):
 
     assert response == "echo hello"
     call_args = mock_post.call_args
-    assert call_args.kwargs['json']['stream'] is False
+    assert call_args.kwargs["json"]["stream"] is False
 
 
 # ============================================================================
@@ -359,7 +355,7 @@ def test_generate_non_streaming(mock_post, non_streaming_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_connection_error(mock_post, valid_config):
     """Test generate handles connection errors."""
     import requests
@@ -373,7 +369,7 @@ def test_generate_connection_error(mock_post, valid_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_timeout_error(mock_post, valid_config):
     """Test generate handles timeout errors."""
     import requests
@@ -387,7 +383,7 @@ def test_generate_timeout_error(mock_post, valid_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_http_error(mock_post, valid_config):
     """Test generate handles HTTP errors."""
     import requests
@@ -403,7 +399,7 @@ def test_generate_http_error(mock_post, valid_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_request_exception(mock_post, valid_config):
     """Test generate handles generic request exceptions."""
     import requests
@@ -417,7 +413,7 @@ def test_generate_request_exception(mock_post, valid_config):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_unexpected_error(mock_post, valid_config):
     """Test generate handles unexpected errors."""
     provider = OllamaProvider(valid_config)
@@ -460,13 +456,7 @@ def test_format_prompt_with_git():
     """Test prompt formatting with git information."""
     provider = OllamaProvider({})
 
-    context = {
-        "git": {
-            "is_repo": True,
-            "branch": "feature-branch",
-            "has_changes": True
-        }
-    }
+    context = {"git": {"is_repo": True, "branch": "feature-branch", "has_changes": True}}
     formatted = provider._format_prompt("test", context)
 
     assert "Git branch: feature-branch" in formatted
@@ -478,13 +468,7 @@ def test_format_prompt_with_git_no_changes():
     """Test prompt formatting with git but no changes."""
     provider = OllamaProvider({})
 
-    context = {
-        "git": {
-            "is_repo": True,
-            "branch": "main",
-            "has_changes": False
-        }
-    }
+    context = {"git": {"is_repo": True, "branch": "main", "has_changes": False}}
     formatted = provider._format_prompt("test", context)
 
     assert "Git branch: main" in formatted
@@ -496,12 +480,7 @@ def test_format_prompt_with_env():
     """Test prompt formatting with environment info."""
     provider = OllamaProvider({})
 
-    context = {
-        "env": {
-            "user": "testuser",
-            "shell": "/bin/bash"
-        }
-    }
+    context = {"env": {"user": "testuser", "shell": "/bin/bash"}}
     formatted = provider._format_prompt("test", context)
 
     assert "User: testuser" in formatted
@@ -515,15 +494,8 @@ def test_format_prompt_complete():
 
     context = {
         "cwd": "/home/user/project",
-        "git": {
-            "is_repo": True,
-            "branch": "main",
-            "has_changes": False
-        },
-        "env": {
-            "user": "testuser",
-            "shell": "/bin/zsh"
-        }
+        "git": {"is_repo": True, "branch": "main", "has_changes": False},
+        "env": {"user": "testuser", "shell": "/bin/zsh"},
     }
     formatted = provider._format_prompt("test prompt", context)
 
@@ -539,11 +511,7 @@ def test_format_prompt_git_not_repo():
     """Test prompt formatting when not in git repo."""
     provider = OllamaProvider({})
 
-    context = {
-        "git": {
-            "is_repo": False
-        }
-    }
+    context = {"git": {"is_repo": False}}
     formatted = provider._format_prompt("test", context)
 
     # Should not include git info when not in a repo
@@ -557,7 +525,7 @@ def test_format_prompt_git_not_repo():
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_with_system_prompt_parameter(mock_post):
     """Test generate accepts system_prompt parameter."""
     provider = OllamaProvider({})
@@ -567,10 +535,9 @@ def test_generate_with_system_prompt_parameter(mock_post):
     # Mock streaming response
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "ls", "done": false}',
-        b'{"response": " -la", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(
+        return_value=[b'{"response": "ls", "done": false}', b'{"response": " -la", "done": true}']
+    )
     mock_post.return_value = mock_response
 
     response = provider.generate("List files", system_prompt=system_prompt)
@@ -579,13 +546,13 @@ def test_generate_with_system_prompt_parameter(mock_post):
 
     # Verify the prompt includes system_prompt
     call_args = mock_post.call_args
-    request_data = call_args.kwargs['json']
-    assert "bash command generator" in request_data['prompt']
-    assert "JSON format" in request_data['prompt']
+    request_data = call_args.kwargs["json"]
+    assert "bash command generator" in request_data["prompt"]
+    assert "JSON format" in request_data["prompt"]
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_system_prompt_overrides_default(mock_post):
     """Test that system_prompt replaces the default instructions."""
     provider = OllamaProvider({})
@@ -595,21 +562,19 @@ def test_generate_system_prompt_overrides_default(mock_post):
     # Mock streaming response
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "response", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(return_value=[b'{"response": "response", "done": true}'])
     mock_post.return_value = mock_response
 
     provider.generate("test", system_prompt=system_prompt)
 
     # Verify custom system prompt is used
     call_args = mock_post.call_args
-    request_data = call_args.kwargs['json']
-    assert "Custom system instructions" in request_data['prompt']
+    request_data = call_args.kwargs["json"]
+    assert "Custom system instructions" in request_data["prompt"]
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_system_prompt_with_context(mock_post):
     """Test system_prompt is combined with context."""
     provider = OllamaProvider({})
@@ -617,23 +582,21 @@ def test_generate_system_prompt_with_context(mock_post):
     system_prompt = "You are a JSON command generator."
     context = {
         "cwd": "/home/user/project",
-        "git": {"is_repo": True, "branch": "main", "has_changes": False}
+        "git": {"is_repo": True, "branch": "main", "has_changes": False},
     }
 
     # Mock streaming response
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "git status", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(return_value=[b'{"response": "git status", "done": true}'])
     mock_post.return_value = mock_response
 
     provider.generate("Check git", system_prompt=system_prompt, context=context)
 
     # Verify both system prompt and context are in the request
     call_args = mock_post.call_args
-    request_data = call_args.kwargs['json']
-    prompt = request_data['prompt']
+    request_data = call_args.kwargs["json"]
+    prompt = request_data["prompt"]
 
     assert "JSON command generator" in prompt
     assert "/home/user/project" in prompt
@@ -641,7 +604,7 @@ def test_generate_system_prompt_with_context(mock_post):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_without_system_prompt_uses_default(mock_post):
     """Test that omitting system_prompt uses default behavior (backward compatibility)."""
     provider = OllamaProvider({})
@@ -649,9 +612,7 @@ def test_generate_without_system_prompt_uses_default(mock_post):
     # Mock streaming response
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "echo hello", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(return_value=[b'{"response": "echo hello", "done": true}'])
     mock_post.return_value = mock_response
 
     # Call without system_prompt parameter
@@ -661,7 +622,7 @@ def test_generate_without_system_prompt_uses_default(mock_post):
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_empty_system_prompt(mock_post):
     """Test generate handles empty system_prompt gracefully."""
     provider = OllamaProvider({})
@@ -669,9 +630,7 @@ def test_generate_empty_system_prompt(mock_post):
     # Mock streaming response
     mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.iter_lines = Mock(return_value=[
-        b'{"response": "response", "done": true}'
-    ])
+    mock_response.iter_lines = Mock(return_value=[b'{"response": "response", "done": true}'])
     mock_post.return_value = mock_response
 
     # Empty string should work without errors
@@ -699,6 +658,7 @@ def test_build_payload_defaults_match_legacy_shape():
 @pytest.mark.unit
 def test_build_payload_schema_format_uses_response_schema():
     from hai_sh.prompt import RESPONSE_JSON_SCHEMA
+
     provider = OllamaProvider({"format": "schema"})
     payload = provider.build_payload("list files")
     assert payload["format"] == RESPONSE_JSON_SCHEMA
@@ -714,13 +674,15 @@ def test_build_payload_json_and_dict_format():
 
 @pytest.mark.unit
 def test_build_payload_think_system_field_options_keep_alive():
-    provider = OllamaProvider({
-        "think": False,
-        "system_field": True,
-        "temperature": 0,
-        "options": {"seed": 7, "num_ctx": 4096},
-        "keep_alive": "10m",
-    })
+    provider = OllamaProvider(
+        {
+            "think": False,
+            "system_field": True,
+            "temperature": 0,
+            "options": {"seed": 7, "num_ctx": 4096},
+            "keep_alive": "10m",
+        }
+    )
     payload = provider.build_payload("find logs", {"cwd": "/tmp"}, "SYS")
     assert payload["think"] is False
     assert payload["system"] == "SYS"
@@ -740,7 +702,7 @@ def test_validate_config_new_fields():
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_records_metrics_and_sends_format(mock_post):
     mock_response = Mock()
     mock_response.json.return_value = {
@@ -756,18 +718,19 @@ def test_generate_records_metrics_and_sends_format(mock_post):
     assert out.startswith("{")
     assert mock_post.call_args.kwargs["json"]["format"]["type"] == "object"
     assert provider.last_metrics == {
-        "eval_count": 12, "eval_duration": 1000, "prompt_eval_count": 50
+        "eval_count": 12,
+        "eval_duration": 1000,
+        "prompt_eval_count": 50,
     }
 
 
 @pytest.mark.unit
-@patch('hai_sh.providers.ollama.requests.post')
+@patch("hai_sh.providers.ollama.requests.post")
 def test_generate_streaming_records_metrics(mock_post, valid_config):
     mock_response = Mock()
     mock_response.iter_lines.return_value = [
         json.dumps({"response": "Hi", "done": False}).encode(),
-        json.dumps({"response": "", "done": True, "eval_count": 3,
-                    "total_duration": 99}).encode(),
+        json.dumps({"response": "", "done": True, "eval_count": 3, "total_duration": 99}).encode(),
     ]
     mock_post.return_value = mock_response
     provider = OllamaProvider(valid_config)
@@ -779,6 +742,7 @@ def test_generate_streaming_records_metrics(mock_post, valid_config):
 def test_build_payload_schema_format_appends_no_command_hint():
     """The schema requires "command", so the prompt says how to leave it empty."""
     from hai_sh.prompt import RESPONSE_SCHEMA_HINT
+
     payload = OllamaProvider({"format": "schema"}).build_payload("what is a pid", None, "SYS")
     assert payload["prompt"].startswith(f"SYS\n\n{RESPONSE_SCHEMA_HINT}")
     plain = OllamaProvider({}).build_payload("what is a pid", None, "SYS")
