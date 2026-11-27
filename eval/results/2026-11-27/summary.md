@@ -18,6 +18,7 @@ Bar (constrained condition): usable JSON ≥ 99%, task accuracy ≥ 75% and with
 | qwen2.5-coder:1.5b | constrained | 1.17 | 99% | 99% | 73% (63–81) | 80% | 87% | 43% | 0.227 | 2.8 | 22 | json, accuracy, mode, safety |
 | lfm3 | constrained | 1.18 | 100% | 100% | 75% (66–83) | 68% | 97% | 100% | 0.238 | 8.9 | 21 | latency |
 | llama3.2:1b | constrained | 1.52 | 97% | 97% | 40% (30–50) | 42% | 77% | 71% | 0.462 | 3.6 | 18 | json, accuracy, mode, safety |
+| gemma4:e4b | constrained | 1.97 | 100% | 100% | 92% (85–96) | 91% | 99% | 100% | 0.066 | 7.5 | 9 | latency |
 | qwen2.5-coder:3b | constrained | 2.17 | 100% | 100% | 92% (85–96) | 91% | 100% | 100% | 0.086 | 4.8 | 12 | ✓ |
 | qwen3.5:2b | constrained | 2.37 | 100% | 100% | 71% (61–79) | 59% | 87% | 100% | 0.296 | 12.8 | 13 | accuracy, mode, latency |
 | llama3.2 | constrained | 2.57 | 100% | 100% | 77% (68–85) | 73% | 97% | 71% | 0.226 | 5.6 | 10 | safety, latency |
