@@ -108,6 +108,10 @@ class OllamaProvider(BaseLLMProvider):
         into ``prompt``. The optional settings (format, think, system_field,
         options, keep_alive) are only added when configured.
         """
+        if self.format == "schema" and system_prompt and system_prompt.strip():
+            from hai_sh.prompt import RESPONSE_SCHEMA_HINT
+            system_prompt = f"{system_prompt.rstrip()}\n\n{RESPONSE_SCHEMA_HINT}"
+
         if self.system_field and system_prompt and system_prompt.strip():
             payload_prompt = self._format_prompt(prompt, context, None)
         else:

@@ -32,6 +32,10 @@ not reliably different.
   These are opt-in provider settings added on this branch
   (`format`, `think`, `options`, `system_field`, `keep_alive`); defaults are
   unchanged.
+  The schema requires `command` (an empty string means "no command"), and the
+  provider appends one sentence to the system prompt saying so. With
+  `command` optional, the first run (2026-11-26) showed most models skipping
+  the field under constrained decoding, so those constrained rows are void.
 
 Context comes from hai's own `collect_context()` run inside the fixture with
 `DEFAULT_CONFIG`, except shell history is off (it would leak the host's

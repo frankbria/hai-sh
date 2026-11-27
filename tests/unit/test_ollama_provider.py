@@ -702,7 +702,7 @@ def test_build_payload_schema_format_uses_response_schema():
     provider = OllamaProvider({"format": "schema"})
     payload = provider.build_payload("list files")
     assert payload["format"] == RESPONSE_JSON_SCHEMA
-    assert RESPONSE_JSON_SCHEMA["required"] == ["explanation", "confidence"]
+    assert RESPONSE_JSON_SCHEMA["required"] == ["explanation", "command", "confidence"]
 
 
 @pytest.mark.unit
@@ -773,3 +773,13 @@ def test_generate_streaming_records_metrics(mock_post, valid_config):
     provider = OllamaProvider(valid_config)
     assert provider.generate("hello") == "Hi"
     assert provider.last_metrics == {"eval_count": 3, "total_duration": 99}
+
+
+@pytest.mark.unit
+def test_build_payload_schema_format_appends_no_command_hint():
+    """The schema requires "command", so the prompt says how to leave it empty."""
+    from hai_sh.prompt import RESPONSE_SCHEMA_HINT
+    payload = OllamaProvider({"format": "schema"}).build_payload("what is a pid", None, "SYS")
+    assert payload["prompt"].startswith(f"SYS\n\n{RESPONSE_SCHEMA_HINT}")
+    plain = OllamaProvider({}).build_payload("what is a pid", None, "SYS")
+    assert RESPONSE_SCHEMA_HINT not in plain["prompt"]
