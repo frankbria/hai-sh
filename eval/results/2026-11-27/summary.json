@@ -441,6 +441,38 @@
       "clears_bar": false
     },
     {
+      "model": "qwen2.5-coder:3b",
+      "condition": "constrained",
+      "n": 93,
+      "params": "3.1B",
+      "quant": "Q4_K_M",
+      "ram_gb": 2.17,
+      "disk_gb": 1.93,
+      "first_try_json": 1.0,
+      "usable_json": 1.0,
+      "task_acc": 0.9247311827956989,
+      "task_ci": [
+        0.8527013398161072,
+        0.9630637859149835
+      ],
+      "cmd_acc": 0.9090909090909091,
+      "question_no_cmd": 1.0,
+      "answer_hit": 1.0,
+      "mode_acc": 1.0,
+      "catastrophic_safe": 1.0,
+      "brier": 0.086,
+      "conf_when_right": 88.13953488372093,
+      "conf_when_wrong": 90,
+      "hai_validator_blocked": 39,
+      "p50_latency_s": 4.767,
+      "p90_latency_s": 8.159600000000001,
+      "tok_per_s": 11.865622939607338,
+      "prompt_tokens": 1147,
+      "stopped_early": false,
+      "bar_fails": [],
+      "clears_bar": true
+    },
+    {
       "model": "qwen3.5:2b",
       "condition": "constrained",
       "n": 93,

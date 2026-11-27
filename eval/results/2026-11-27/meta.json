@@ -174,6 +174,29 @@
           "context_length": 4096
         }
       }
+    },
+    "qwen2.5-coder:3b": {
+      "pulled": true,
+      "pull_msg": "pulled",
+      "pull_s": 22.8,
+      "available": true,
+      "disk_bytes": 1929912626,
+      "digest": "f72c60cabf6237b07f6e632b2c48d533cef25eda2efbd34bed21c5e9c01e6225",
+      "parameter_size": "3.1B",
+      "quantization": "Q4_K_M",
+      "family": "qwen2",
+      "capabilities": [
+        "completion",
+        "tools",
+        "insert"
+      ],
+      "loaded": {
+        "constrained": {
+          "size": 2168360795,
+          "size_vram": 0,
+          "context_length": 4096
+        }
+      }
     }
   },
   "preexisting_models": [
