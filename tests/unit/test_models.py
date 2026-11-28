@@ -917,3 +917,10 @@ class TestSeventeenthReviewFixes:
         monkeypatch.setattr(m, "_get_json", lambda url, *a, **k: reply)
         models = m.list_installed("http://localhost:11434")
         assert models is not None and models[0].size == 0
+
+
+class TestEighteenthReviewFixes:
+    def test_format_bytes_never_crashes_on_huge_sizes(self):
+        assert m.format_bytes(10**309) == "unknown"
+        assert m.format_bytes(float("inf")) == "unknown"
+        assert m.format_bytes(4587156505) == "4.6 GB"

@@ -473,3 +473,14 @@ def test_empty_config_that_changes_while_hai_reads_it_is_left_alone(cfg, monkeyp
     assert run(cfg, "use", "phi4-mini", "--no-pull") == 1
     assert cfg.read_text() == ""
     assert "changed while hai was reading it" in capsys.readouterr().err
+
+
+def test_dangling_config_link_stops_instead_of_using_defaults(tmp_path, capsys):
+    link = tmp_path / "remote.yaml"
+    link.symlink_to(tmp_path / "unmounted" / "config.yaml")
+    with pytest.raises(SystemExit) as exc:
+        run(link, "pull", "phi4-mini", "--yes")
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "Cannot read config" in err and "doesn't exist" in err
+    assert not (tmp_path / "unmounted").exists()

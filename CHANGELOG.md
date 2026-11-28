@@ -98,6 +98,9 @@ Not yet published to PyPI.
   that isn't a section, or an empty `providers:` line no longer crashes
   `hai-model`. A malformed cloud provider section is skipped when hai offers
   a cloud fallback, and an absurd model size from Ollama reads as unknown.
+- `hai-model` stops with "Cannot read config" when `--config` is a link to a
+  file that isn't there (for example on an unmounted drive), instead of
+  using the defaults.
 - In app mode, `--model` now applies to the provider app mode actually uses.
 - `hai-model` stops with "Cannot read config" when the config file exists but
   isn't valid, instead of going on with the defaults (and localhost's Ollama).

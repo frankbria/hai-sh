@@ -12,6 +12,7 @@ raising, so detection can never be the reason a command fails.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import platform
@@ -1053,7 +1054,12 @@ def format_bytes(n: Optional[float]) -> str:
     """Decimal units, as Ollama and disk vendors use: 4587156505 -> '4.6 GB'."""
     if n is None:
         return "unknown"
-    n = float(n)
+    try:
+        n = float(n)
+    except (TypeError, ValueError, OverflowError):
+        return "unknown"
+    if not math.isfinite(n):
+        return "unknown"
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if abs(n) < 1000 or unit == "TB":
             return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"

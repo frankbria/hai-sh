@@ -14,6 +14,7 @@ official commands. Design: docs/design/model-management.md.
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import sys
 from pathlib import Path
@@ -241,6 +242,13 @@ def _load(args: argparse.Namespace) -> tuple:
 
     config_path = Path(args.config).expanduser() if args.config else get_config_path()
     try:
+        if config_path.is_symlink() and not config_path.exists():
+            # A link to a file that isn't there (an unmounted drive) is not a
+            # missing config: the defaults could act on another Ollama.
+            raise ConfigError(
+                f"{config_path} links to {os.readlink(str(config_path))}, which doesn't "
+                "exist (is that drive mounted?)"
+            )
         if not config_path.exists():
             # A missing file gives the defaults (never another config file).
             return load_config(config_path=config_path, use_pydantic=False), config_path
