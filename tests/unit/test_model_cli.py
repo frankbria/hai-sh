@@ -274,3 +274,18 @@ def test_missing_config_file_uses_defaults_not_the_home_config(tmp_path, fake, m
     out = capsys.readouterr().out
     assert fake.url not in out
     assert "localhost:11434" in out
+
+
+@pytest.mark.parametrize(
+    "text", ["providers:\n  ollama:\n    base_url: [unclosed\n", "- not\n- a mapping\n"]
+)
+def test_broken_existing_config_stops_instead_of_using_defaults(tmp_path, fake, capsys, text):
+    """A --config file that exists but can't be parsed must not mean localhost's Ollama."""
+    cfg = tmp_path / "remote.yaml"
+    cfg.write_text(text)
+    fake.pullable.add("phi4-mini")
+    with pytest.raises(SystemExit) as exc:
+        run(cfg, "pull", "phi4-mini", "--yes")
+    assert exc.value.code == 1
+    assert "Cannot read config" in capsys.readouterr().err
+    assert cfg.read_text() == text

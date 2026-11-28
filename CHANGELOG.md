@@ -80,6 +80,8 @@ Not yet published to PyPI.
   isn't valid YAML, isn't laid out the way hai expects, is a link to its own
   `.bak`, or was saved by something else while hai was updating it.
 - In app mode, `--model` now applies to the provider app mode actually uses.
+- `hai-model` stops with "Cannot read config" when the config file exists but
+  isn't valid, instead of going on with the defaults (and localhost's Ollama).
 
 ## v0.1.4 (2026-02-16)
 

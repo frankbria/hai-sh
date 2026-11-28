@@ -227,12 +227,16 @@ def ollama_problem_lines(env: m.ModelEnvironment) -> List[str]:
 
 
 def _load(args: argparse.Namespace) -> tuple:
-    from hai_sh.config import ConfigError, load_config
+    from hai_sh.config import ConfigError, load_config, load_config_file
     from hai_sh.init import get_config_path
 
     config_path = Path(args.config).expanduser() if args.config else get_config_path()
     try:
-        # A missing file gives the defaults (never another config file).
+        # A missing file gives the defaults (never another config file). A file
+        # that exists but can't be read or parsed stops here: going on with the
+        # defaults could act on a different Ollama from the one the file names.
+        if config_path.exists():
+            load_config_file(config_path)
         config = load_config(config_path=config_path, use_pydantic=False)
     except ConfigError as e:
         print(f"Cannot read config: {e}", file=sys.stderr)
