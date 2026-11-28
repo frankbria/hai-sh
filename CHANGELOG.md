@@ -81,7 +81,9 @@ Not yet published to PyPI.
   isn't valid YAML, isn't laid out the way hai expects, is a link to its own
   `.bak`, or was saved by something else while hai was updating it or
   downloading the model. "Make this your default model?" also leaves it alone
-  if the config now points at another Ollama.
+  if the config now points at another Ollama. If the config can't be written
+  (for example a link into a read-only dotfiles folder), the previous `.bak`
+  is kept.
 - `hai-model` and hai's Ollama messages no longer print a `user:password@`
   part of the Ollama address.
 - `hai-model` stops with "Cannot read config" when `providers.ollama.base_url`
@@ -89,7 +91,8 @@ Not yet published to PyPI.
   instead of using the local Ollama.
 - A download finishes as soon as Ollama reports success.
 - The setup wizard checks the Ollama address the way hai will use it, with
-  `${VAR}` expanded.
+  `${VAR}` expanded, and stops without saving if the address expands to
+  nothing.
 - An unfinished Ollama address (such as `http://[::1`), a `models:` setting
   that isn't a section, or an empty `providers:` line no longer crashes
   `hai-model`.

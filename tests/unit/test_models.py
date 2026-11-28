@@ -832,3 +832,30 @@ def test_service_dot_ollama_without_models_counts_for_the_disk_check(tmp_path, m
     monkeypatch.delenv("OLLAMA_MODELS", raising=False)
     monkeypatch.setattr(m, "SERVICE_MODELS_DIR", service / "models")
     assert m.ollama_model_dirs() == [service / "models"]
+
+
+class TestFifteenthReviewFixes:
+    def test_config_that_cannot_be_written_keeps_the_previous_backup(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("providers:\n  ollama:\n    model: old\n")
+        bak = tmp_path / "config.yaml.bak"
+        bak.write_text("previous backup\n")
+        real = m._stage_private
+
+        def refuse_config(path, text, follow_symlink=True):
+            if Path(path) == cfg:
+                raise m.ConfigWriteError("read-only dotfiles")
+            return real(path, text, follow_symlink)
+
+        monkeypatch.setattr(m, "_stage_private", refuse_config)
+        with pytest.raises(m.ConfigWriteError):
+            m.set_config_model(cfg, "new")
+        assert bak.read_text() == "previous backup\n"
+        assert "model: old" in cfg.read_text()
+
+    def test_refused_rename_leaves_no_temporary_file(self, tmp_path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("providers:\n  ollama:\n    model: old\n")
+        with pytest.raises(m.ConfigWriteError):
+            m.replace_private(cfg, "x", expected="something else")
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml"]

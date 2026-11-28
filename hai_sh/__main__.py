@@ -505,6 +505,12 @@ def run_setup_wizard() -> int:
             value="http://localhost:11434",
             prompt_str="URL: ",
         )
+        if base_url and setup_url_is_empty(base_url):
+            print(gum.error(
+                f"{base_url} expands to nothing, so hai couldn't use it. Set the "
+                "variable or type the URL, then run setup again. Nothing was saved."
+            ))
+            return 1
         if base_url:
             config_updates["ollama_base_url"] = base_url
         model = choose_setup_ollama_model(setup_probe_url(base_url))
@@ -573,6 +579,13 @@ def setup_probe_url(base_url: Optional[str]) -> str:
     from hai_sh.config import expand_env_vars
 
     return expand_env_vars(base_url or "").strip() or "http://localhost:11434"
+
+
+def setup_url_is_empty(base_url: str) -> bool:
+    """True when ``base_url`` as typed expands to nothing (an unset ${VAR})."""
+    from hai_sh.config import expand_env_vars
+
+    return not expand_env_vars(base_url).strip()
 
 
 def choose_setup_ollama_model(base_url: str) -> Optional[str]:

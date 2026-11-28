@@ -690,22 +690,29 @@ def set_config_model(
         ollama["model"] = name
         new_text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
 
-    if config_path.exists():
-        # Check before touching the backup too, so a refused edit also keeps
-        # the previous .bak.
-        if config_path.read_text() != original:
-            raise ConfigWriteError(
-                f"{config_path} changed while hai was updating it. Nothing was "
-                "changed; run the command again."
-            )
-        # Replace the backup itself, even if it is a symlink: never write
-        # through it into whatever file it points to.
-        replace_private(backup_path, original, follow_symlink=False)
-    else:
+    if not config_path.exists():
         config_path.parent.mkdir(parents=True, exist_ok=True)
-    # If the file changed since hai read it (an editor saved it meanwhile),
-    # stop rather than replace that edit with an older copy.
-    replace_private(config_path, new_text, expected=original)
+    # Write the new config to its temporary file first: if hai can't (a
+    # symlink into a read-only dotfiles folder), the previous .bak is kept.
+    tmp, target = _stage_private(config_path, new_text)
+    try:
+        if config_path.exists():
+            # Check before touching the backup too, so a refused edit also
+            # keeps the previous .bak.
+            if config_path.read_text() != original:
+                raise ConfigWriteError(
+                    f"{config_path} changed while hai was updating it. Nothing was "
+                    "changed; run the command again."
+                )
+            # Replace the backup itself, even if it is a symlink: never write
+            # through it into whatever file it points to.
+            replace_private(backup_path, original, follow_symlink=False)
+        # If the file changed since hai read it (an editor saved it
+        # meanwhile), stop rather than replace that edit with an older copy.
+        _commit_private(tmp, target, expected=original)
+    except BaseException:
+        _discard(tmp)
+        raise
     return old, name
 
 
@@ -732,6 +739,19 @@ def replace_private(
     doesn't allow the temporary file (hai never falls back to rewriting the
     live file in place) or when ``expected`` no longer matches.
     """
+    tmp, target = _stage_private(path, text, follow_symlink)
+    try:
+        _commit_private(tmp, target, expected)
+    except BaseException:
+        _discard(tmp)
+        raise
+
+
+def _stage_private(path: Path, text: str, follow_symlink: bool = True) -> Tuple[Path, Path]:
+    """
+    Write ``text`` to a flushed mode-600 temporary file next to ``path``.
+    Returns (temporary file, file it will replace). See replace_private.
+    """
     target = Path(os.path.realpath(str(path))) if follow_symlink else Path(path)
     tmp = target.with_name(f".{target.name}.hai-tmp-{os.getpid()}")
     try:
@@ -748,22 +768,31 @@ def replace_private(
             f.write(text)
             f.flush()
             os.fsync(f.fileno())
-        if expected is not None:
-            current = target.read_text() if target.exists() else ""
-            if current != expected:
-                raise ConfigWriteError(
-                    f"{target} changed while hai was updating it. Nothing was changed; "
-                    "run the command again."
-                )
-        os.replace(str(tmp), str(target))
     except BaseException:
         if fd >= 0:
             os.close(fd)
-        try:
-            os.unlink(str(tmp))
-        except OSError:
-            pass
+        _discard(tmp)
         raise
+    return tmp, target
+
+
+def _commit_private(tmp: Path, target: Path, expected: Optional[str] = None) -> None:
+    """Rename ``tmp`` over ``target``, if ``target`` still holds ``expected``."""
+    if expected is not None:
+        current = target.read_text() if target.exists() else ""
+        if current != expected:
+            raise ConfigWriteError(
+                f"{target} changed while hai was updating it. Nothing was changed; "
+                "run the command again."
+            )
+    os.replace(str(tmp), str(target))
+
+
+def _discard(tmp: Path) -> None:
+    try:
+        os.unlink(str(tmp))
+    except OSError:
+        pass
 
 
 def _only_model_changed(original: str, edited: str, name: str) -> bool:

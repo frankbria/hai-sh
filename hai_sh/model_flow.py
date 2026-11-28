@@ -37,10 +37,12 @@ ProviderChoice = Tuple[Any, str]  # (provider instance, provider name)
 
 def _binding_unsafe(raw: str) -> bool:
     """True when ``raw`` can't appear in a binding message as typed."""
+    # The bindings split on <<<SEPARATOR>>>, which the message then rewrites.
     # The message is collapsed to single spaces, so a run of spaces or any
     # other whitespace wouldn't survive either.
     return (
-        "  " in raw
+        "<<<SEPARATOR>>>" in raw
+        or "  " in raw
         or any(c in raw for c in "'\"\\")
         or any(c < " " or c == "\x7f" or (c.isspace() and c != " ") for c in raw)
     )

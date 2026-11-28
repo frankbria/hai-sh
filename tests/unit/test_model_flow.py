@@ -800,3 +800,22 @@ class TestFourteenthReviewFixes:
         monkeypatch.setattr(config_mod, "load_config_file", counting)
         model_cli.main(["--config", str(cfg), "list"])
         assert len(reads) == 1
+
+
+class TestFifteenthReviewFixes:
+    def test_setup_refuses_a_url_that_expands_to_nothing(self, monkeypatch):
+        from hai_sh.__main__ import setup_url_is_empty
+
+        monkeypatch.delenv("HAI_TEST_OLLAMA_URL", raising=False)
+        assert setup_url_is_empty("${HAI_TEST_OLLAMA_URL}")
+        assert not setup_url_is_empty("http://localhost:11434")
+        monkeypatch.setenv("HAI_TEST_OLLAMA_URL", "http://box:11434")
+        assert not setup_url_is_empty("${HAI_TEST_OLLAMA_URL}")
+
+    def test_config_path_with_the_separator_is_shown_as_a_placeholder(self, tmp_path):
+        cfg = tmp_path / "team<<<SEPARATOR>>>prod.yaml"
+        out = json.loads(
+            model_flow.suggest_only_json(f"Run hai-model use x --config {cfg}", config_path=cfg)
+        )
+        assert "SEPARATOR>>>prod" not in out["conversation"]
+        assert "YOUR_CONFIG_FILE" in out["conversation"]
