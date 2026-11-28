@@ -80,7 +80,10 @@ Not yet published to PyPI.
 - `hai-model use` leaves the config alone, with a clear message, when the file
   isn't valid YAML, isn't laid out the way hai expects, is a link to its own
   `.bak`, or was saved by something else while hai was updating it or
-  downloading the model.
+  downloading the model. "Make this your default model?" also leaves it alone
+  if the config now points at another Ollama.
+- `hai-model` and hai's Ollama messages no longer print a `user:password@`
+  part of the Ollama address.
 - An unfinished Ollama address (such as `http://[::1`), a `models:` setting
   that isn't a section, or an empty `providers:` line no longer crashes
   `hai-model`.

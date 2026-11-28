@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import platform
 import shutil
 import stat
@@ -225,6 +226,11 @@ def same_model(a: str, b: str) -> bool:
 # --------------------------------------------------------------------------
 # Detection
 # --------------------------------------------------------------------------
+
+
+def display_url(url: str) -> str:
+    """``url`` without any ``user:password@`` part, for printing."""
+    return re.sub(r"//[^/@]*@", "//", url or "")
 
 
 def is_local_url(base_url: str) -> bool:
@@ -557,7 +563,7 @@ def pull_model(
             timeout=timeout,
         )
     except requests.exceptions.RequestException as e:
-        raise PullError(f"Cannot reach Ollama at {base_url}: {e}") from e
+        raise PullError(f"Cannot reach Ollama at {display_url(base_url)}") from e
 
     if response.status_code != 200:
         raise PullError(_error_text(response) or f"Ollama returned HTTP {response.status_code}")

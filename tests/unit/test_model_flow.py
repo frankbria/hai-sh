@@ -472,7 +472,9 @@ class TestSetupWizard:
         from hai_sh.__main__ import choose_setup_ollama_model
 
         monkeypatch.setattr(model_cli.m.shutil, "which", lambda n: None)
-        seen = self._choose(monkeypatch, lambda opts: next(o for o in opts if o.startswith("phi4-mini")))
+        seen = self._choose(
+            monkeypatch, lambda opts: next(o for o in opts if o.startswith("phi4-mini"))
+        )
         assert choose_setup_ollama_model("http://127.0.0.1:9") == "phi4-mini"
         assert all("installed" not in o for o in seen["options"])
         assert seen["options"][-1] == "Another model (type its name)"
@@ -568,7 +570,9 @@ def test_setup_wizard_new_config_policy_is_any(home):
 
 
 class TestConfigFlagInHints:
-    def test_suggest_only_hint_names_the_config_file(self, tmp_path, home, fake, capfd, monkeypatch):
+    def test_suggest_only_hint_names_the_config_file(
+        self, tmp_path, home, fake, capfd, monkeypatch
+    ):
         other = tmp_path / "remote config.yaml"
         other.write_text(
             "provider: ollama\nproviders:\n  ollama:\n"
@@ -717,7 +721,9 @@ def test_setup_config_survives_quotes_and_newlines_in_values(tmp_path, monkeypat
     from hai_sh import __main__ as main_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(main_mod, "get_config_path", lambda: tmp_path / "config.yaml", raising=False)
+    monkeypatch.setattr(
+        main_mod, "get_config_path", lambda: tmp_path / "config.yaml", raising=False
+    )
     weird = 'evil"\nprovider: openai\n#'
     main_mod._write_setup_config({"provider": "ollama", "ollama_model": weird})
     from hai_sh.init import get_config_path
@@ -725,3 +731,45 @@ def test_setup_config_survives_quotes_and_newlines_in_values(tmp_path, monkeypat
     data = _yaml.safe_load(get_config_path().read_text())
     assert data["provider"] == "ollama"
     assert data["providers"]["ollama"]["model"] == weird
+
+
+class TestTwelfthReviewFixes:
+    def test_default_offer_refuses_when_the_config_now_names_another_ollama(
+        self, home, fake, monkeypatch, capfd
+    ):
+        cfg = write_config(home, fake.url)
+        fake.installed["phi4-mini:latest"] = 1
+        terminal(monkeypatch, "n", "y", "y")
+        real_ask = model_flow.ask
+
+        def ask(question, choices):
+            if question.startswith("Make "):  # another terminal edits base_url first
+                cfg.write_text(cfg.read_text().replace(fake.url, "http://other-host:11434"))
+            return real_ask(question, choices)
+
+        monkeypatch.setattr(model_flow, "ask", ask)
+        assert run_hai("what", "is", "this") == 0  # the question is still answered
+        data = yaml.safe_load(cfg.read_text())["providers"]["ollama"]
+        assert data["model"] == "gemma4:e2b"
+        assert data["base_url"] == "http://other-host:11434"
+        assert "another Ollama" in capfd.readouterr().out
+
+    def test_status_hides_credentials_in_the_ollama_url(self, tmp_path, fake, capsys):
+        cfg = tmp_path / "c.yaml"
+        url = fake.url.replace("http://", "http://alice:s3cret@")
+        cfg.write_text(f'providers:\n  ollama:\n    base_url: "{url}"\n')
+        model_cli.main(["--config", str(cfg), "status"])
+        out = capsys.readouterr().out
+        assert "s3cret" not in out and "alice" not in out
+
+    @pytest.mark.parametrize(
+        "url, shown",
+        [
+            ("http://u:p@host:11434/x", "http://host:11434/x"),
+            ("https://token@host", "https://host"),
+            ("http://localhost:11434", "http://localhost:11434"),
+            ("", ""),
+        ],
+    )
+    def test_display_url(self, url, shown):
+        assert model_cli.m.display_url(url) == shown

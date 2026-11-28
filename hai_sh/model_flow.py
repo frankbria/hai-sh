@@ -134,7 +134,9 @@ def missing_model_flow(
     entry = catalog.get(model) if catalog else None
 
     print("hai needs a local model to run.")
-    print(f"  Ollama:   running ({env.version or 'version unknown'}) at {env.base_url}")
+    print(
+        f"  Ollama:   running ({env.version or 'version unknown'}) at {m.display_url(env.base_url)}"
+    )
     print(f"  Model:    {model} is not installed")
     for line in model_facts(model, env, catalog):
         print(line)
@@ -170,7 +172,7 @@ def missing_model_flow(
             if env_other.model_installed or consented_pull(
                 env_other, picked, config_path=config_path
             ):
-                _offer_default(picked, config_path)
+                _offer_default(picked, config_path, oc["base_url"])
                 return _ollama_provider(config, picked)
         # Nothing picked or the download didn't happen: still offer the cloud.
         cloud = offer_cloud(config)
@@ -182,7 +184,7 @@ def missing_model_flow(
     alternative = _installed_alternative(env, catalog, policy, exclude=model)
     if alternative:
         if ask(f"{alternative} is installed. Use it for this question?", "yN") == "y":
-            _offer_default(alternative, config_path)
+            _offer_default(alternative, config_path, oc["base_url"])
             return _ollama_provider(config, alternative)
     cloud = offer_cloud(config)
     if cloud:
@@ -238,15 +240,27 @@ def _pick_other(
     return options.get(choice or "")
 
 
-def _offer_default(name: str, config_path: Optional[Path]) -> None:
+def _offer_default(name: str, config_path: Optional[Path], base_url: str) -> None:
+    from hai_sh.config import ConfigError, load_config
+
     if config_path is None:
         from hai_sh.init import get_config_path
 
         config_path = get_config_path()
     if ask(f"Make {name} your default model?", "yN") == "y":
         try:
-            old, new = m.set_config_model(config_path, name)
-        except OSError as e:
+            # Read the text, then the settings: if the file changed in between,
+            # the edit below refuses because the file no longer matches.
+            text = config_path.read_text() if config_path.exists() else ""
+            current = m.ollama_config(load_config(config_path=config_path, use_pydantic=False))
+            if current["base_url"].rstrip("/") != (base_url or "").rstrip("/"):
+                raise m.ConfigWriteError(
+                    f"{config_path} now points hai at another Ollama "
+                    f"({m.display_url(current['base_url'])}), which may not have {name}. "
+                    "Nothing was changed."
+                )
+            old, new = m.set_config_model(config_path, name, expected_text=text)
+        except (OSError, ValueError, ConfigError) as e:
             print(f"Config not changed: {e}")
             return
         print(f"providers.ollama.model: {old or '(not set)'} -> {new}")

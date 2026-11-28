@@ -210,7 +210,7 @@ def ollama_problem_lines(env: m.ModelEnvironment) -> List[str]:
     """Why Ollama can't be used, and the official commands to fix it."""
     if not env.local:
         return [
-            f"Ollama at {env.base_url} is not answering.",
+            f"Ollama at {m.display_url(env.base_url)} is not answering.",
             "That server is on another machine; start Ollama there, or change",
             "providers.ollama.base_url in ~/.hai/config.yaml.",
         ]
@@ -218,7 +218,9 @@ def ollama_problem_lines(env: m.ModelEnvironment) -> List[str]:
         return [
             "hai needs Ollama to run local models, and it is not installed."
         ] + m.ollama_install_hint()
-    return [f"Ollama is installed but not running at {env.base_url}."] + m.ollama_start_hint()
+    return [
+        f"Ollama is installed but not running at {m.display_url(env.base_url)}."
+    ] + m.ollama_start_hint()
 
 
 # --------------------------------------------------------------------------
@@ -262,9 +264,11 @@ def cmd_status(args: argparse.Namespace) -> int:
     policy = m.effective_licence_policy(config)
 
     if env.running:
-        print(f"Ollama:        running ({env.version or 'version unknown'}) at {env.base_url}")
+        print(
+            f"Ollama:        running ({env.version or 'version unknown'}) at {m.display_url(env.base_url)}"
+        )
     else:
-        print(f"Ollama:        not reachable at {env.base_url}")
+        print(f"Ollama:        not reachable at {m.display_url(env.base_url)}")
     provider = config.get("provider", "ollama")
     note = "" if provider == "ollama" else f"  (hai's provider is {provider})"
     if env.running:
@@ -337,7 +341,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     print()
     if installed is None:
-        print(f"Installed: unknown (Ollama is not answering at {oc['base_url']})")
+        print(f"Installed: unknown (Ollama is not answering at {m.display_url(oc['base_url'])})")
         return 1
     if not installed:
         print("Installed: none yet")
