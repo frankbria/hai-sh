@@ -20,6 +20,9 @@
 pipx install hai-sh
 hai-install-shell
 
+# Check Ollama and the model (hai offers the download on first use)
+hai-model status
+
 # Use directly
 hai "show me files modified in the last 24 hours"
 
@@ -242,9 +245,36 @@ brew install ollama
 # Start server
 ollama serve
 
-# Pull model
-ollama pull gemma4:e2b
+# Download hai's default model (4.6 GB; shows size, free disk and licence first)
+hai-model pull gemma4:e2b
 ```
+
+If the model isn't installed, `hai` offers to download it the first time you
+ask something (Enter means No). It never downloads without a yes, never prompts
+from the Ctrl+X Ctrl+H binding or a pipe, and never installs Ollama for you.
+
+### Managing Models
+
+```bash
+hai-model status          # Is Ollama running? Is the configured model installed?
+hai-model list            # hai's tested models, and what you have installed
+hai-model pull phi4-mini  # Download a model (asks first; --yes for scripts)
+hai-model use phi4-mini   # Make it the default (edits ~/.hai/config.yaml, keeps a .bak)
+hai --model phi4-mini "list files"   # Use a model for one question only
+```
+
+`hai-model list` shows the models hai has been tested with:
+
+| model | role | download | task accuracy | median latency | licence |
+|---|---|---|---|---|---|
+| `gemma4:e2b` | default | 4.6 GB | 88% | 4.6 s | Apache 2.0 |
+| `qwen2.5-coder:3b` | lighter | 1.9 GB | 91% | 4.8 s | Qwen Research (non-commercial) |
+| `phi4-mini` | lighter | 2.5 GB | 83% | 7.2 s | MIT |
+| `gemma4:e4b` | stronger | 6.6 GB | 91% | 7.5 s | Apache 2.0 |
+
+The default is always licensed for commercial use. If you use hai at work, set
+`models: {licence_policy: commercial}` and hai stops suggesting
+`qwen2.5-coder:3b`. See [CONFIGURATION.md](./CONFIGURATION.md#models).
 
 ### Setting Up OpenAI
 
@@ -336,6 +366,9 @@ hai --confirm "delete temp files"
 
 # Just show suggestion without executing
 hai --suggest-only "find large files"
+
+# Use a different Ollama model for this question only
+hai --model phi4-mini "find large files"
 
 # Disable colors
 hai --no-color "show status"

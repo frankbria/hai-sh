@@ -39,6 +39,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
+      # macOS ships zsh; Ubuntu runners don't. The key-binding tests run both shells.
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
       - name: Install from uv.lock
         run: uv sync --frozen --extra dev
       - name: Run tests

@@ -466,8 +466,11 @@ Ollama provides free, local LLM access:
 
 3. **Pull a Model**:
    ```bash
-   ollama pull gemma4:e2b
+   hai-model pull gemma4:e2b   # or: ollama pull gemma4:e2b
    ```
+   `hai-model` shows the download size, free disk space and licence before it
+   asks. If you skip this step, `hai` offers the download the first time you
+   use it. `hai-model list` shows the other models hai has been tested with.
 
 4. **Test Ollama**:
    ```bash
@@ -672,8 +675,11 @@ ollama serve
 # In another terminal, test
 ollama list
 
+# Check Ollama and the configured model
+hai-model status
+
 # Pull a model if needed
-ollama pull gemma4:e2b
+hai-model pull gemma4:e2b
 
 # Test hai with Ollama
 hai "test ollama connection"

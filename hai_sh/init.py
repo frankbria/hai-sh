@@ -60,7 +60,9 @@ def create_default_config() -> str:
         # hai-sh configuration file
         ...
     """
-    return """# hai-sh configuration file
+    from hai_sh.providers.ollama import DEFAULT_OLLAMA_MODEL
+
+    template = """# hai-sh configuration file
 # See https://github.com/frankbria/hai-sh for documentation
 
 # Default LLM provider to use
@@ -79,12 +81,17 @@ providers:
 
   ollama:
     base_url: "http://localhost:11434"
-    model: "gemma4:e2b"       # Install with: ollama pull gemma4:e2b
+    model: "{model}"       # See: hai-model list
     format: "schema"          # Make Ollama return hai's JSON reply format
     temperature: 0
     think: false              # Skip hidden reasoning (faster)
     options:
       num_predict: 1024       # Stop runaway answers
+
+# Which local models hai recommends: "any", or "commercial" for only models
+# whose licence allows commercial use.
+models:
+  licence_policy: "any"
 
 # Context settings
 context:
@@ -99,6 +106,7 @@ output:
   show_reasoning: true
   use_colors: true
 """
+    return template.replace("{model}", DEFAULT_OLLAMA_MODEL)
 
 
 def init_hai_directory(force: bool = False) -> tuple[bool, Optional[str]]:

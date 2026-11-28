@@ -762,8 +762,11 @@ class TestRunSetupWizard:
 
     def test_setup_ollama_provider(self):
         from hai_sh.__main__ import run_setup_wizard
+        # The model menu has its own tests (test_model_flow.py); keep this one
+        # about the provider step and independent of a local Ollama.
         with patch.object(gum, "choose", return_value="Ollama (local)"), \
-             patch.object(gum, "input_text", side_effect=["http://localhost:11434", "llama3.2"]), \
+             patch.object(gum, "input_text", side_effect=["http://localhost:11434"]), \
+             patch("hai_sh.__main__.choose_setup_ollama_model", return_value="gemma4:e2b"), \
              patch.object(gum, "confirm", return_value=False), \
              patch("hai_sh.__main__._write_setup_config") as mock_write, \
              patch.object(gum, "styled", side_effect=lambda t, **k: t), \
@@ -773,6 +776,7 @@ class TestRunSetupWizard:
             call_args = mock_write.call_args[0][0]
             assert call_args["provider"] == "ollama"
             assert call_args["ollama_base_url"] == "http://localhost:11434"
+            assert call_args["ollama_model"] == "gemma4:e2b"
 
     def test_setup_cancelled(self):
         from hai_sh.__main__ import run_setup_wizard
@@ -783,8 +787,11 @@ class TestRunSetupWizard:
 
     def test_setup_with_shell_integration(self):
         from hai_sh.__main__ import run_setup_wizard
+        # The model menu has its own tests (test_model_flow.py); keep this one
+        # about the provider step and independent of a local Ollama.
         with patch.object(gum, "choose", return_value="Ollama (local)"), \
-             patch.object(gum, "input_text", side_effect=["http://localhost:11434", "llama3.2"]), \
+             patch.object(gum, "input_text", side_effect=["http://localhost:11434"]), \
+             patch("hai_sh.__main__.choose_setup_ollama_model", return_value="gemma4:e2b"), \
              patch.object(gum, "confirm", return_value=True), \
              patch("hai_sh.__main__._write_setup_config"), \
              patch("hai_sh.install_shell.install_shell_integration") as mock_install, \

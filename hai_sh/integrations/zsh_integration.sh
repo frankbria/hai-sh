@@ -51,10 +51,12 @@ _hai_parse_json() {
 
     # Try to use python3 for JSON parsing (most reliable)
     if command -v python3 &> /dev/null; then
-        python3 -c "
+        # The JSON goes in on stdin: pasted into the Python source, its escapes
+        # (a quoted word in a command, say) were read as Python escapes first.
+        printf '%s' "$json" | python3 -c "
 import json, sys
 try:
-    data = json.loads('''$json''')
+    data = json.load(sys.stdin)
     print(data.get('conversation', ''))
     print('<<<SEPARATOR>>>')
     print(data.get('command', ''))

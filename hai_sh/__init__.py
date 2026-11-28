@@ -5,6 +5,17 @@ A context-aware wrapper around bash that enables natural language
 command generation and execution via LLM assistance.
 """
 
+import warnings as _warnings
+
+# macOS's system Python 3.9 is built with LibreSSL, and urllib3 2.x prints a
+# NotOpenSSLWarning on import. hai still works there, the user can't act on
+# the warning, and the Ctrl+X Ctrl+H binding without gum reads hai's stderr
+# together with its JSON, so this one line broke every query. Hide it before
+# anything imports requests.
+_warnings.filterwarnings(
+    "ignore", message="urllib3 v2 only supports OpenSSL", module="urllib3"
+)
+
 from hai_sh.config import (
     ConfigError,
     ConfigLoadError,
