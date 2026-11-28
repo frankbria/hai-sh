@@ -1,0 +1,62 @@
+name: Tests
+
+# Runs the full pytest suite on every pull request and on pushes to main.
+#
+# Two kinds of job:
+#   locked: installs exactly what uv.lock pins (reproducible; what we develop against)
+#   latest: installs the newest versions pip resolves today, which is what a user
+#           gets from `pip install hai-sh`. An upstream release that breaks hai
+#           shows up here before a user reports it.
+#
+# No job needs an API key or a running Ollama: tests that need one skip.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  locked:
+    name: pytest (locked, py${{ matrix.python }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # Oldest supported (requires-python >=3.9) and newest classified version.
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install from uv.lock
+        run: uv sync --frozen --extra dev
+      - name: Run tests
+        run: uv run --frozen --no-sync pytest
+
+  latest:
+    name: pytest (latest deps, py3.13, ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install newest dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip list
+      - name: Run tests
+        run: python -m pytest

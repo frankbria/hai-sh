@@ -64,12 +64,17 @@ def test_environment_preserves_home():
 
 
 @pytest.mark.unit
-def test_environment_preserves_user():
-    """Test that USER variable is preserved."""
+def test_environment_preserves_user(monkeypatch):
+    """Test that USER variable is preserved.
+
+    Containers and some CI runners start without USER, so set it rather than
+    depend on the machine running the tests.
+    """
+    monkeypatch.setenv("USER", "hai-test-user")
     result = execute_command("echo $USER")
 
     assert result.success is True
-    assert len(result.stdout.strip()) > 0
+    assert result.stdout.strip() == "hai-test-user"
 
 
 @pytest.mark.unit
