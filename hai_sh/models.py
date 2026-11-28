@@ -288,7 +288,7 @@ def list_installed(base_url: str) -> Optional[List[InstalledModel]]:
         details = details if isinstance(details, dict) else {}
         try:
             size = int(m.get("size") or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):  # 1e309 parses as inf
             size = 0
         out.append(
             InstalledModel(
@@ -592,7 +592,7 @@ def pull_model(
             if digest and event.get("total"):
                 try:
                     layers[digest] = (int(event.get("completed") or 0), int(event["total"]))
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     pass  # progress is cosmetic; a bad counter doesn't stop the pull
             if on_progress:
                 done = sum(c for c, _ in layers.values())
@@ -1002,9 +1002,13 @@ def configured_cloud_providers(config: Dict[str, Any]) -> List[Tuple[str, Dict[s
     provider's usual environment variable. Returns (name, provider config).
     """
     out = []
-    providers = (config or {}).get("providers") or {}
+    providers = (config or {}).get("providers")
+    providers = providers if isinstance(providers, dict) else {}
     for name, env_var in CLOUD_PROVIDERS:
-        section = dict(providers.get(name) or {})
+        raw = providers.get(name)
+        if raw is not None and not isinstance(raw, dict):
+            continue  # a malformed section (say, a string) is skipped, not fatal
+        section = dict(raw or {})
         key = section.get("api_key") or os.environ.get(env_var)
         if key and str(key).strip():
             section["api_key"] = str(key).strip()

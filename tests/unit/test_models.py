@@ -900,3 +900,20 @@ class TestFifteenthReviewFixes:
         m.set_config_model(cfg, "new")
         assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml", "config.yaml.bak"]
         assert "model: old" in (tmp_path / "config.yaml.bak").read_text()
+
+
+class TestSeventeenthReviewFixes:
+    def test_malformed_cloud_section_does_not_hide_the_other_provider(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        config = {"providers": {"openai": "oops", "anthropic": {"api_key": "sk-ant-x"}}}
+        assert [n for n, _ in m.configured_cloud_providers(config)] == ["anthropic"]
+        assert m.configured_cloud_providers({"providers": "oops"}) == []
+
+    def test_overflowing_model_size_reads_as_unknown(self, monkeypatch):
+        import json
+
+        reply = json.loads('{"models": [{"name": "big:latest", "size": 1e309}]}')
+        monkeypatch.setattr(m, "_get_json", lambda url, *a, **k: reply)
+        models = m.list_installed("http://localhost:11434")
+        assert models is not None and models[0].size == 0

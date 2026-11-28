@@ -96,7 +96,8 @@ Not yet published to PyPI.
   nothing.
 - An unfinished Ollama address (such as `http://[::1`), a `models:` setting
   that isn't a section, or an empty `providers:` line no longer crashes
-  `hai-model`.
+  `hai-model`. A malformed cloud provider section is skipped when hai offers
+  a cloud fallback, and an absurd model size from Ollama reads as unknown.
 - In app mode, `--model` now applies to the provider app mode actually uses.
 - `hai-model` stops with "Cannot read config" when the config file exists but
   isn't valid, instead of going on with the defaults (and localhost's Ollama).
