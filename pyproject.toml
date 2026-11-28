@@ -95,6 +95,10 @@ markers = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
+    # Apple's system Python 3.9 on macOS is built against LibreSSL, and urllib3 v2
+    # warns about that when it is imported. It is harmless for hai (HTTPS still
+    # works) and it is not ours to fix, so it must not fail the suite.
+    "ignore:urllib3 v2 only supports OpenSSL:Warning",
 ]
 
 [tool.ruff]

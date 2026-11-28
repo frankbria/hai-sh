@@ -17,6 +17,24 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _http_request():
+    """A real request object of the HTTP library the installed openai uses.
+
+    openai 1.x builds on httpx; openai 3.x moved to httpx2. Its exception
+    classes read headers from the request and response, so plain Mocks fail.
+    """
+    try:
+        import httpx2 as http
+    except ImportError:  # openai 1.x
+        import httpx as http
+    return http, http.Request("POST", "https://api.openai.com/v1/chat/completions")
+
+
+def _http_response(status_code):
+    http, request = _http_request()
+    return http.Response(status_code, request=request)
+
+
 @pytest.fixture
 def valid_config():
     """Valid OpenAI configuration."""
@@ -460,8 +478,7 @@ def test_generate_authentication_error(mock_openai_client, minimal_config):
 
     provider = OpenAIProvider(minimal_config)
 
-    mock_response = Mock()
-    mock_response.status_code = 401
+    mock_response = _http_response(401)
 
     with patch.object(
         provider.client.chat.completions,
@@ -479,8 +496,7 @@ def test_generate_rate_limit_error(mock_openai_client, minimal_config):
 
     provider = OpenAIProvider(minimal_config)
 
-    mock_response = Mock()
-    mock_response.status_code = 429
+    mock_response = _http_response(429)
 
     with patch.object(
         provider.client.chat.completions,
@@ -498,13 +514,12 @@ def test_generate_api_error(mock_openai_client, minimal_config):
 
     provider = OpenAIProvider(minimal_config)
 
-    mock_response = Mock()
-    mock_response.status_code = 500
+    _, request = _http_request()
 
     with patch.object(
         provider.client.chat.completions,
         'create',
-        side_effect=APIError("Server error", request=Mock(), body=None)
+        side_effect=APIError("Server error", request=request, body=None)
     ):
         with pytest.raises(RuntimeError, match="API error"):
             provider.generate("test")
