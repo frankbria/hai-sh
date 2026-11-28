@@ -1,7 +1,7 @@
 # Design: finding, installing and switching local models
 
-Status: **proposal**, not implemented. Written 2026-11-28, before v0.1.5.
-Owner: Frank Bria. Decisions still open are listed in [section 11](#11-decisions-for-the-maintainer).
+Status: **accepted design**, not implemented. Written 2026-11-28, before v0.1.5.
+Owner: Frank Bria. Decisions are recorded in [section 12](#12-decisions).
 
 ## 1. Why this exists
 
@@ -74,7 +74,7 @@ hai-model remove <name>     # delete a model from Ollama (asks first)
 hai --model <name> <query>  # one-shot override, config untouched
 ```
 
-The command name is decision D1.
+The command name is decision D1 (accepted).
 
 ## 4. Detection
 
@@ -173,14 +173,15 @@ Rules for the file:
   which needs re-checking before it is shown to users as memory needed.
 - **Licence is read from the model card**, by a person, and recorded with the
   date. The eval does not guess licences.
-- **Roles.** Exactly one `default`. A `lighter` entry is what hai offers when
-  the default doesn't fit the disk or RAM (decision D4). `stronger` is for
-  users with headroom (today `gemma4:e4b`: 91%, 7.5 s, Apache 2.0).
+- **Roles.** Exactly one `default`. `lighter` entries are what hai offers
+  when the default doesn't fit the disk or RAM, in order of preference
+  (section 6.2). `stronger` is for users with headroom (today `gemma4:e4b`:
+  91%, 7.5 s, Apache 2.0).
 - **Updates ship with releases.** hai does not fetch the catalog over the
   network: no surprise traffic, works offline, and the numbers match the
   version the user runs.
 
-### How the eval feeds it
+### 6.1 How the eval feeds it
 
 1. `eval/run_eval.py` already records per-model results. Add two measured
    fields per model: on-disk size from `/api/tags` and loaded size from
@@ -193,6 +194,46 @@ Rules for the file:
    default equals `DEFAULT_OLLAMA_MODEL`, so the two can never drift.
 4. Changing the default model is then one regenerated file plus a CHANGELOG
    line, reviewed in a PR with the eval run linked.
+
+### 6.2 Licences and the non-commercial carve-out
+
+The best lighter model, `qwen2.5-coder:3b` (91%, 4.8 s, 1.9 GB download), is
+under the Qwen Research licence, which does not allow commercial use. hai is
+free today, so it can recommend it, but if hai is ever sold the
+recommendations must be able to drop such models without a redesign. The
+carve-out is built in from the start:
+
+1. **Every catalog entry carries `licence` and `commercial_use`** (true or
+   false), set by hand from the model card, with the date it was read.
+2. **One policy decides what hai may recommend.** `licence_policy` is either
+   `any` (recommend everything in the catalog) or `commercial` (recommend only
+   entries with `commercial_use: true`). It has two sources:
+   - a package constant, `hai_sh/models.py: DEFAULT_LICENCE_POLICY = "any"`.
+     A paid build or a future release flips this one line;
+   - a user setting, `models.licence_policy`, so a business using hai at work
+     can choose `commercial` today. A user can tighten the package policy but
+     not loosen it: `commercial` in the package wins over `any` in a config.
+3. **Roles are ordered lists, filtered by the policy.** Today `lighter` is
+   `[qwen2.5-coder:3b, phi4-mini]`. Under `any`, hai offers `qwen2.5-coder:3b`;
+   under `commercial`, the same list yields `phi4-mini` (MIT, 84%, 7.2 s).
+   Turning the carve-out on changes no data, only which entry comes first.
+4. **The default is always commercial-safe.** A unit test fails if the
+   `default` entry has `commercial_use: false`, so the carve-out can never
+   leave hai with no default. The same test checks that every role still has
+   at least one entry under `commercial`.
+5. **Consent shows the licence plainly.** The pull prompt for a
+   non-commercial model says "Licence: Qwen Research, non-commercial use
+   only", so the user agrees knowing it.
+6. **Nothing is taken away from users.** If the policy later becomes
+   `commercial`, users who already run `qwen2.5-coder:3b` keep it. hai shows a
+   one-time notice that it is no longer recommended for commercial use and
+   names the replacement; it never deletes or switches a model.
+7. **Untested models are unaffected.** `hai-model use <any-name>` keeps
+   working; the policy only governs what hai *recommends*.
+
+Whether a paid hai changes what a user's own model licence allows is a
+question for a lawyer when that day comes; this mechanism only makes sure hai
+itself can stop recommending such models with a one-line change.
 
 ## 7. Switching models
 
@@ -280,25 +321,77 @@ Rules:
    non-TTY and `--suggest-only` rules. Tests for both shells' binding path.
 5. Setup wizard uses the catalog and the consented pull.
 6. One-time notice for `llama3.2` users.
-7. Docs: README quick start, INSTALL, CONFIGURATION (upgrade notes, catalog).
+7. `licence_policy` (package constant + user setting) and its tests
+   (section 6.2).
+8. Docs: README quick start, INSTALL, CONFIGURATION (upgrade notes, catalog,
+   licence policy).
 
 **Phase 2**
 
-8. `hai-model recommend` using disk and RAM; `remove`.
-9. TUI model switching.
-10. `eval/export_catalog.py` and the measured size fields in the eval.
+9. `hai-model recommend` using disk and RAM; `remove`.
+10. TUI model switching.
+11. `eval/export_catalog.py` and the measured size fields in the eval.
 
 **Phase 3 (only if wanted)**
 
-11. Show capabilities from `/api/show` and drop the `think` 400-retry.
-12. Remote-Ollama awareness in `status` (which host, whose disk).
+12. Show capabilities from `/api/show` and drop the `think` 400-retry.
+13. Remote-Ollama awareness in `status` (which host, whose disk).
 
 Rough size: phase 1 is one PR of a few hundred lines plus tests; it does not
 touch the command validator, the prompt or the providers' generate path.
 
-## 11. Decisions for the maintainer
+## 11. Releasing v0.1.5 as if there are users
 
-Each has a recommendation; none blocks writing phase 1 except D1.
+There may be few users, but the release is run as if every one of them will
+upgrade with a v0.1.4 config and a habit. Verified state of the repo
+(2026-11-28): no CI workflow runs the tests (the only workflow is the GLM PR
+review, which skips Markdown-only changes), there are no git tags, there is no
+CHANGELOG, and the release is a manual `python -m build` + `twine upload`.
+The full suite has 2 known failures that predate the model work
+(`test_cross_provider::test_providers_available`,
+`test_executor_environment::test_environment_preserves_user`).
+
+Before the release:
+
+1. **Test CI.** Add a GitHub Actions workflow that runs `pytest` on Python
+   3.9 and the newest supported version, on Ubuntu and macOS, for every PR.
+   Fix or mark the 2 known failures so the suite is green and stays green.
+2. **Upgrade test.** A test that starts from the exact config v0.1.4 wrote
+   (`model: "llama3.2"`, no `format`/`temperature`/`think`) and asserts: the
+   model stays `llama3.2`, the file is not rewritten, the one-time notice
+   appears once in a TTY and never in `--suggest-only` or a pipe.
+3. **Fresh-install test.** In a clean container: no Ollama → install
+   instructions; Ollama with no models → consented pull prompt; non-TTY → the
+   JSON message, no prompt; after pull → the original query is answered.
+4. **CHANGELOG.md**, started with this release, with an *Upgrade notes*
+   section: the new default model and why, that existing pinned models are
+   kept, the new sampling settings they inherit and how to turn them off, the
+   new `hai-model` command, and the licence policy.
+
+The release itself:
+
+5. **Release candidate first.** Build `0.1.5rc1`, upload to TestPyPI, install
+   it with `pipx` from TestPyPI on Linux and macOS, and run the bash and zsh
+   key binding by hand. Fix and repeat as `rc2` if needed.
+6. **Version bump in one commit**: `pyproject.toml`, `hai_sh/__init__.py`,
+   the README badge and "Current Version" line.
+7. **Tag and GitHub release.** Tag `v0.1.5` (the first tag in the repo), with
+   release notes copied from the CHANGELOG, then upload the same built files
+   to PyPI.
+8. **If it breaks.** PyPI does not allow re-uploading a version. Yank 0.1.5
+   on PyPI (installs fall back to 0.1.4), fix, and release 0.1.6. Write this
+   down in the release checklist so nobody improvises it.
+9. **After release**, install from PyPI in a clean container once more and
+   run one query against Ollama.
+
+Steps 5 to 9 are publishing steps and each waits for the maintainer's yes.
+
+## 12. Decisions
+
+
+Accepted by the maintainer on 2026-11-28: D1 (a), D2 (a), D3 (a), D5 (a),
+D6 (a). D4 was changed as recorded below. He also asked that the release be
+run as if there are real users (section 11).
 
 - **D1. Command shape.**
   (a) a separate `hai-model` command, like the existing `hai-install-shell`
@@ -317,7 +410,9 @@ Each has a recommendation; none blocks writing phase 1 except D1.
   (a) `phi4-mini`: MIT, 84%, 7.2 s; (b) `qwen2.5-coder:3b`: 91%, 4.8 s,
   1.9 GB download, but the Qwen Research licence forbids commercial use;
   (c) none: tell those users to use a cloud provider.
-  *(Recommended: (a), after its download size is measured.)*
+  **Outcome:** recommend `qwen2.5-coder:3b` while hai is free, with a
+  built-in way to drop non-commercial models if hai is ever sold. Mechanism
+  in section 6.2; `phi4-mini` is the commercial-safe entry behind it.
 - **D5. Existing `llama3.2` users.**
   (a) one-time notice with the switch command *(recommended)*; (b) migrate
   them automatically; (c) say nothing.
