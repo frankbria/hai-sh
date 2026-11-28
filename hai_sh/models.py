@@ -267,8 +267,11 @@ def list_installed(base_url: str) -> Optional[List[InstalledModel]]:
     data = _get_json(f"{base_url.rstrip('/')}/api/tags")
     if not isinstance(data, dict):
         return None
+    models = data.get("models") or []
+    if not isinstance(models, list):
+        return None
     out = []
-    for m in data.get("models") or []:
+    for m in models:
         if not isinstance(m, dict) or not m.get("name"):
             continue
         details = m.get("details")
@@ -445,8 +448,10 @@ def ollama_config(config: Dict[str, Any]) -> Dict[str, Any]:
     providers = (config or {}).get("providers") if isinstance(config, dict) else None
     ollama = providers.get("ollama") if isinstance(providers, dict) else None
     section = dict(ollama) if isinstance(ollama, dict) else {}
-    section.setdefault("base_url", "http://localhost:11434")
-    section.setdefault("model", DEFAULT_OLLAMA_MODEL)
+    # A blank or non-text value (base_url: null) means the default, as it does for hai.
+    for key, default in (("base_url", "http://localhost:11434"), ("model", DEFAULT_OLLAMA_MODEL)):
+        value = section.get(key)
+        section[key] = value.strip() if isinstance(value, str) and value.strip() else default
     return section
 
 

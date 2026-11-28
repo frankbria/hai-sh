@@ -774,3 +774,15 @@ class TestSixthReviewFixes:
         monkeypatch.setattr(requests, "get", lambda *a, **k: Response())
         models = m.list_installed("http://localhost:11434")
         assert [(x.name, x.size) for x in models] == [("a", 0), ("b", 0)]
+
+
+class TestEighthReviewFixes:
+    @pytest.mark.parametrize("value", [None, "", "  ", 5])
+    def test_blank_or_odd_base_url_means_the_default(self, value):
+        oc = m.ollama_config({"providers": {"ollama": {"base_url": value, "model": None}}})
+        assert oc["base_url"] == "http://localhost:11434"
+        assert oc["model"] == DEFAULT_OLLAMA_MODEL
+
+    def test_tags_with_models_not_a_list_is_unreadable(self, monkeypatch):
+        monkeypatch.setattr(m, "_get_json", lambda url, **k: {"models": 1})
+        assert m.list_installed("http://x") is None
