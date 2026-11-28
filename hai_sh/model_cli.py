@@ -322,7 +322,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         print(f"To install it: {hai_model_command('pull ' + shlex.quote(env.model), config_path)}")
         return 1
     if m.same_model(env.model, m.OLD_DEFAULT_MODEL):
-        notice = m.old_default_notice(env.model)
+        notice = m.old_default_notice(env.model, config_path)
         if notice:
             print()
             print(notice)
@@ -419,11 +419,15 @@ def cmd_pull(args: argparse.Namespace) -> int:
     )
 
 
-def _config_text(args: argparse.Namespace) -> Optional[str]:
-    """The config file's text now ("" if missing), or None if it can't be read."""
+def _config_file(args: argparse.Namespace) -> Path:
     from hai_sh.init import get_config_path
 
-    path = Path(args.config).expanduser() if args.config else get_config_path()
+    return Path(args.config).expanduser() if args.config else get_config_path()
+
+
+def _config_text(args: argparse.Namespace) -> Optional[str]:
+    """The config file's text now ("" if missing), or None if it can't be read."""
+    path = _config_file(args)
     try:
         return path.read_text() if path.exists() else ""
     except (OSError, UnicodeDecodeError):
@@ -436,10 +440,13 @@ def cmd_use(args: argparse.Namespace) -> int:
     # default config when there was none; that counts as the starting point.)
     # If the file changes later (say, base_url during a long download), the
     # edit below stops instead of mixing old and new settings.
+    existed = _config_file(args).exists()
     first = _config_text(args)
     config, config_path = _load(args)
     before = _config_text(args)
-    if first and first != before:
+    # An existing file (even an empty one) must not have changed; only a
+    # missing one may turn into the default config _load wrote.
+    if first is not None and (existed or first) and first != before:
         print(
             f"Config not changed: {config_path} changed while hai was reading it. "
             "Run the command again.",

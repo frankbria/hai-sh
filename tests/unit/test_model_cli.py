@@ -110,7 +110,7 @@ class TestStatus:
         cfg.write_text(f'providers:\n  ollama:\n    base_url: "{fake.url}"\n    model: llama3.2\n')
         fake.installed["llama3.2:latest"] = 1
         assert run(cfg, "status") == 0
-        assert "hai-model use gemma4:e2b" in capsys.readouterr().out
+        assert f"hai-model --config {cfg} use gemma4:e2b" in capsys.readouterr().out
 
 
 class TestList:
@@ -464,3 +464,12 @@ class TestThirteenthReviewFixes:
         text = out["conversation"]
         assert "YOUR_MODEL" in text and "it's" not in text
         assert "hai-model pull YOUR_MODEL" in text
+
+
+def test_empty_config_that_changes_while_hai_reads_it_is_left_alone(cfg, monkeypatch, capsys):
+    cfg.write_text("")
+    texts = iter(["", "providers:\n  ollama:\n    base_url: http://remote:11434\n"])
+    monkeypatch.setattr(model_cli, "_config_text", lambda args: next(texts))
+    assert run(cfg, "use", "phi4-mini", "--no-pull") == 1
+    assert cfg.read_text() == ""
+    assert "changed while hai was reading it" in capsys.readouterr().err

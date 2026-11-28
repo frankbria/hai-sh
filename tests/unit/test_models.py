@@ -859,3 +859,44 @@ class TestFifteenthReviewFixes:
         with pytest.raises(m.ConfigWriteError):
             m.replace_private(cfg, "x", expected="something else")
         assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml"]
+
+    def test_old_default_notice_keeps_the_selected_config(self, tmp_path):
+        cfg = tmp_path / "remote.yaml"
+        text = m.old_default_notice("llama3.2", cfg)
+        assert f"hai-model --config {cfg} use " in text
+        assert m.old_default_notice("llama3.2").endswith(f"hai-model use {DEFAULT_OLLAMA_MODEL}")
+
+    def test_backup_is_put_back_when_the_final_check_refuses(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("providers:\n  ollama:\n    model: old\n")
+        bak = tmp_path / "config.yaml.bak"
+        bak.write_text("previous backup\n")
+
+        def refuse(tmp, target, expected=None):
+            raise m.ConfigWriteError("changed while hai was updating it")
+
+        monkeypatch.setattr(m, "_commit_private", refuse)
+        with pytest.raises(m.ConfigWriteError):
+            m.set_config_model(cfg, "new")
+        assert bak.read_text() == "previous backup\n"
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml", "config.yaml.bak"]
+
+    def test_new_backup_is_removed_when_the_final_check_refuses(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("providers:\n  ollama:\n    model: old\n")
+
+        def refuse(tmp, target, expected=None):
+            raise m.ConfigWriteError("changed while hai was updating it")
+
+        monkeypatch.setattr(m, "_commit_private", refuse)
+        with pytest.raises(m.ConfigWriteError):
+            m.set_config_model(cfg, "new")
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml"]
+
+    def test_successful_update_leaves_no_kept_aside_file(self, tmp_path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("providers:\n  ollama:\n    model: old\n")
+        (tmp_path / "config.yaml.bak").write_text("previous backup\n")
+        m.set_config_model(cfg, "new")
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml", "config.yaml.bak"]
+        assert "model: old" in (tmp_path / "config.yaml.bak").read_text()

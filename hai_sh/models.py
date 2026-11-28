@@ -695,6 +695,8 @@ def set_config_model(
     # Write the new config to its temporary file first: if hai can't (a
     # symlink into a read-only dotfiles folder), the previous .bak is kept.
     tmp, target = _stage_private(config_path, new_text)
+    saved: Optional[Tuple[str, Optional[Path]]] = None
+    backup_replaced = False
     try:
         if config_path.exists():
             # Check before touching the backup too, so a refused edit also
@@ -704,16 +706,62 @@ def set_config_model(
                     f"{config_path} changed while hai was updating it. Nothing was "
                     "changed; run the command again."
                 )
+            # Keep the previous backup aside, so it can be put back if the
+            # final check below refuses the edit.
+            saved = _keep_aside(backup_path)
             # Replace the backup itself, even if it is a symlink: never write
             # through it into whatever file it points to.
             replace_private(backup_path, original, follow_symlink=False)
+            backup_replaced = True
         # If the file changed since hai read it (an editor saved it
         # meanwhile), stop rather than replace that edit with an older copy.
         _commit_private(tmp, target, expected=original)
     except BaseException:
         _discard(tmp)
+        if backup_replaced:
+            _put_back(backup_path, saved)
+        else:
+            _drop_aside(saved)
         raise
+    _drop_aside(saved)
     return old, name
+
+
+def _keep_aside(path: Path) -> Optional[Tuple[str, Optional[Path]]]:
+    """
+    Hard-link ``path`` (a file or a symlink, never its target) to a hidden
+    name next to it, so it can be put back. ("absent", None) if there is no
+    ``path``; None if the filesystem can't make the link (nothing to restore).
+    """
+    if not os.path.lexists(str(path)):
+        return ("absent", None)
+    aside = path.with_name(f".{path.name}.hai-prev-{os.getpid()}")
+    try:
+        if os.path.lexists(str(aside)):
+            os.unlink(str(aside))
+        os.link(str(path), str(aside), follow_symlinks=False)
+    except (OSError, NotImplementedError):
+        return None
+    return ("kept", aside)
+
+
+def _put_back(path: Path, saved: Optional[Tuple[str, Optional[Path]]]) -> None:
+    """Undo replacing ``path``: restore what _keep_aside kept, best effort."""
+    if saved is None:
+        return
+    kind, aside = saved
+    try:
+        if kind == "absent":
+            os.unlink(str(path))
+        elif aside is not None:
+            os.replace(str(aside), str(path))
+    except OSError:
+        pass
+
+
+def _drop_aside(saved: Optional[Tuple[str, Optional[Path]]]) -> None:
+    if saved is not None and saved[1] is not None:
+        _discard(saved[1])
 
 
 class ConfigWriteError(OSError):
@@ -916,11 +964,15 @@ OLD_DEFAULT_MODEL = "llama3.2"
 OLD_DEFAULT_NOTICE = "default-model-gemma4-e2b"
 
 
-def old_default_notice(model: str) -> Optional[str]:
+def old_default_notice(model: str, config_path: Optional[Path] = None) -> Optional[str]:
     """
     The one-time notice for users still on the v0.1.4 default, or None.
     The caller decides whether this is a TTY and records that it was shown.
+    With ``config_path`` (the file hai read), the suggested command names it,
+    so following it changes that config and not the default one.
     """
+    from hai_sh.model_cli import hai_model_command
+
     if not same_model(model, OLD_DEFAULT_MODEL):
         return None
     try:
@@ -932,7 +984,8 @@ def old_default_notice(model: str) -> Optional[str]:
         f"hai's default local model is now {new.name} "
         f"({percent(new.task_accuracy)} on hai's {catalog.cases}-case test, "
         f"{new.refused} of 7 dangerous requests refused; llama3.2 scored 77% and refused 5 of 7). "
-        f"Your config keeps {OLD_DEFAULT_MODEL}. To switch: hai-model use {new.name}"
+        f"Your config keeps {OLD_DEFAULT_MODEL}. To switch: "
+        f"{hai_model_command('use ' + new.name, config_path)}"
     )
 
 

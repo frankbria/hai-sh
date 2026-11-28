@@ -930,7 +930,7 @@ def main():
         apply_cli_overrides(config, args.provider, args.model)
 
         # Once: tell v0.1.4 users who still run llama3.2 that the default moved
-        model_flow.maybe_show_old_default_notice(config, args.suggest_only)
+        model_flow.maybe_show_old_default_notice(config, args.suggest_only, config_path)
 
         # Initialize memory manager
         memory_manager = MemoryManager(config)

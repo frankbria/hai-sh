@@ -82,8 +82,9 @@ Not yet published to PyPI.
   `.bak`, or was saved by something else while hai was updating it or
   downloading the model. "Make this your default model?" also leaves it alone
   if the config now points at another Ollama. If the config can't be written
-  (for example a link into a read-only dotfiles folder), the previous `.bak`
-  is kept.
+  (for example a link into a read-only dotfiles folder) or is refused at the
+  last moment, the previous `.bak` is kept.
+- The llama3.2 notice's switch command names the `--config` file hai read.
 - `hai-model` and hai's Ollama messages no longer print a `user:password@`
   part of the Ollama address.
 - `hai-model` stops with "Cannot read config" when `providers.ollama.base_url`

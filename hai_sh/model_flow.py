@@ -359,10 +359,13 @@ def stderr_is_tty() -> bool:
         return False
 
 
-def maybe_show_old_default_notice(config: Dict[str, Any], suggest_only: bool) -> bool:
+def maybe_show_old_default_notice(
+    config: Dict[str, Any], suggest_only: bool, config_path: Optional[Path] = None
+) -> bool:
     """
     Print, once, that the default moved from llama3.2 to the catalog default.
     Only in a terminal, never in --suggest-only. Returns True if printed.
+    ``config_path`` is the --config file, if any, for the suggested command.
     """
     if suggest_only or not is_interactive() or not stderr_is_tty():
         return False
@@ -370,7 +373,7 @@ def maybe_show_old_default_notice(config: Dict[str, Any], suggest_only: bool) ->
     if "ollama" not in priority:
         return False
     model = m.ollama_config(config)["model"]
-    notice = m.old_default_notice(model)
+    notice = m.old_default_notice(model, config_path)
     if not notice or m.notice_seen(m.OLD_DEFAULT_NOTICE):
         return False
     print(notice, file=sys.stderr)
