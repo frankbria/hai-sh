@@ -106,6 +106,8 @@ user's own Ollama, and when the model is missing it prints the exact
 - [ ] Re-run the eval in the Docker sandbox after the scorer fixes, to confirm
       the 88% figure end to end
 - [ ] Investigate a hai-specific fine-tune (below)
+- [ ] Model detection, consented install and a model switcher before v0.1.5
+      (design: [`docs/design/model-management.md`](docs/design/model-management.md))
 
 #### Investigation: a smaller, hai-specific model
 
