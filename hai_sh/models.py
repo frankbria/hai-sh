@@ -573,7 +573,11 @@ def pull_model(
         raise PullError(f"Cannot reach Ollama at {display_url(base_url)}") from e
 
     if response.status_code != 200:
-        raise PullError(_error_text(response) or f"Ollama returned HTTP {response.status_code}")
+        try:
+            message = _error_text(response) or f"Ollama returned HTTP {response.status_code}"
+        finally:
+            response.close()
+        raise PullError(message)
 
     finished = False
     try:

@@ -484,3 +484,13 @@ def test_dangling_config_link_stops_instead_of_using_defaults(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "Cannot read config" in err and "doesn't exist" in err
     assert not (tmp_path / "unmounted").exists()
+
+
+def test_yaml_error_never_prints_the_files_text(tmp_path, capsys):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text('providers:\n  openai:\n    api_key: "sk-secret-value-123\n')
+    with pytest.raises(SystemExit):
+        run(cfg, "status")
+    err = capsys.readouterr().err
+    assert "Cannot read config" in err and "(line 4, column 1)" in err
+    assert "sk-secret-value-123" not in err

@@ -203,6 +203,20 @@ def merge_configs(base: dict, override: dict) -> dict:
     return result
 
 
+def _yaml_error_summary(e: yaml.YAMLError) -> str:
+    """
+    What went wrong and where, without PyYAML's excerpt of the file: the
+    excerpt can be an API key (an unterminated quoted value, say).
+    """
+    problem = getattr(e, "problem", None)
+    context = getattr(e, "context", None)
+    mark = getattr(e, "problem_mark", None) or getattr(e, "context_mark", None)
+    text = " ".join(str(part) for part in (context, problem) if part) or "the file can't be parsed"
+    if mark is not None:
+        text += f" (line {mark.line + 1}, column {mark.column + 1})"
+    return text
+
+
 def load_config_file(config_path: Optional[Path] = None) -> dict:
     """
     Load configuration from YAML file.
@@ -240,7 +254,9 @@ def load_config_file(config_path: Optional[Path] = None) -> dict:
         try:
             config = yaml.safe_load(content)
         except yaml.YAMLError as e:
-            raise ConfigLoadError(f"Invalid YAML syntax in {config_path}: {e}")
+            raise ConfigLoadError(
+                f"Invalid YAML syntax in {config_path}: {_yaml_error_summary(e)}"
+            )
 
         if config is None:
             # Empty file
