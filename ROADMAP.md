@@ -101,7 +101,7 @@ user's own Ollama, and when the model is missing it prints the exact
 `ollama pull` command.
 
 #### Next steps
-- [ ] Widen the command validator: it blocks 31 of the 83 correct answers
+- [ ] Widen the command validator: it blocks 31 of the 82 correct answers
       (pipes, `&&`, redirects, `mkdir`, `tar`) that the model gets right
 - [ ] Re-run the eval in the Docker sandbox after the scorer fixes, to confirm
       the 88% figure end to end
