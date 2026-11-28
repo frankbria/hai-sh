@@ -237,6 +237,7 @@ def _load(args: argparse.Namespace) -> tuple:
         # A missing file gives the defaults (never another config file). A file
         # that exists but can't be read or parsed stops here: going on with the
         # defaults could act on a different Ollama from the one the file names.
+        raw = None
         if config_path.exists():
             raw = load_config_file(config_path)
             providers = raw.get("providers")
@@ -251,6 +252,17 @@ def _load(args: argparse.Namespace) -> tuple:
                     "base_url and model"
                 )
         config = load_config(config_path=config_path, use_pydantic=False)
+        if raw is not None:
+            ollama = (raw.get("providers") or {}).get("ollama") or {}
+            url = ((config.get("providers") or {}).get("ollama") or {}).get("base_url")
+            if "base_url" in ollama and not (isinstance(url, str) and url.strip()):
+                # e.g. base_url: ${OLLAMA_URL} with the variable unset. hai
+                # refuses such a config, so hai-model mustn't fall back to
+                # the local Ollama either.
+                raise ConfigError(
+                    f"{config_path}: providers.ollama.base_url is empty "
+                    "(is an environment variable it uses unset?)"
+                )
     except ConfigError as e:
         print(f"Cannot read config: {e}", file=sys.stderr)
         raise SystemExit(1) from None

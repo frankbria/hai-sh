@@ -1009,7 +1009,9 @@ def main():
             except OllamaModelNotFoundError as e:
                 if args.suggest_only:
                     print(model_flow.suggest_only_json(
-                        model_flow.missing_model_message(e.model, config_path), config_path
+                        model_flow.missing_model_message(e.model, config_path),
+                        config_path,
+                        model=e.model,
                     ))
                     return 0
                 if not model_flow.is_interactive():

@@ -424,3 +424,43 @@ def test_config_changed_between_reads_is_left_alone(cfg, monkeypatch, capsys):
     assert run(cfg, "use", "phi4-mini", "--no-pull") == 1
     assert cfg.read_text() == before
     assert "changed while hai was reading it" in capsys.readouterr().err
+
+
+class TestThirteenthReviewFixes:
+    def test_base_url_from_an_unset_variable_stops_instead_of_using_localhost(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.delenv("HAI_TEST_OLLAMA_URL", raising=False)
+        cfg = tmp_path / "c.yaml"
+        cfg.write_text("providers:\n  ollama:\n    base_url: ${HAI_TEST_OLLAMA_URL}\n")
+        with pytest.raises(SystemExit) as exc:
+            run(cfg, "pull", "phi4-mini", "--yes")
+        assert exc.value.code == 1
+        assert "base_url is empty" in capsys.readouterr().err
+
+    def test_pull_finishes_on_success_without_waiting_for_the_stream_to_end(self, monkeypatch):
+        import requests
+
+        class Pull:
+            status_code = 200
+
+            def iter_lines(self):
+                yield b'{"status": "success"}'
+                raise requests.exceptions.ReadTimeout("server kept the stream open")
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(requests, "post", lambda *a, **k: Pull())
+        model_cli.m.pull_model("http://x", "a")  # no PullError
+
+    def test_model_name_with_an_apostrophe_is_a_placeholder_in_binding_json(self):
+        import json
+
+        from hai_sh.model_flow import missing_model_message, suggest_only_json
+
+        name = "it's"
+        out = json.loads(suggest_only_json(missing_model_message(name), model=name))
+        text = out["conversation"]
+        assert "YOUR_MODEL" in text and "it's" not in text
+        assert "hai-model pull YOUR_MODEL" in text

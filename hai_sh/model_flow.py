@@ -35,7 +35,20 @@ from hai_sh.model_cli import (
 ProviderChoice = Tuple[Any, str]  # (provider instance, provider name)
 
 
-def suggest_only_json(conversation: str, config_path: Optional[Path] = None) -> str:
+def _binding_unsafe(raw: str) -> bool:
+    """True when ``raw`` can't appear in a binding message as typed."""
+    # The message is collapsed to single spaces, so a run of spaces or any
+    # other whitespace wouldn't survive either.
+    return (
+        "  " in raw
+        or any(c in raw for c in "'\"\\")
+        or any(c < " " or c == "\x7f" or (c.isspace() and c != " ") for c in raw)
+    )
+
+
+def suggest_only_json(
+    conversation: str, config_path: Optional[Path] = None, model: Optional[str] = None
+) -> str:
     """
     The JSON the shell bindings read, with no command. Shell integration
     files installed before v0.1.5 embed the JSON in a Python triple-quoted
@@ -43,23 +56,25 @@ def suggest_only_json(conversation: str, config_path: Optional[Path] = None) -> 
     breaks it, so hai's own messages contain none: one line, no backslashes,
     no double quotes, no triple quotes.
 
-    A ``--config`` path that can't be written without one of those (an
-    apostrophe needs a double quote or a backslash in shell) is shown as
-    YOUR_CONFIG_FILE rather than as a command for a different path.
+    A ``--config`` path or a ``model`` name that can't be written without one
+    of those (an apostrophe needs a double quote or a backslash in shell) is
+    shown as YOUR_CONFIG_FILE or YOUR_MODEL rather than as a command for a
+    different path or model.
     """
-    if config_path is not None:
-        raw = str(config_path)
-        # The message is collapsed to single spaces, so a run of spaces or
-        # any other whitespace in the path wouldn't survive either.
-        if (
-            "  " in raw
-            or any(c in raw for c in "'\"\\")
-            or any(c < " " or c == "\x7f" or (c.isspace() and c != " ") for c in raw)
-        ):
+    for raw, placeholder, where in (
+        (
+            str(config_path) if config_path is not None else None,
+            "YOUR_CONFIG_FILE",
+            "the file you passed to --config",
+        ),
+        (model, "YOUR_MODEL", "the model name in providers.ollama.model"),
+    ):
+        if raw and _binding_unsafe(raw):
             quoted = shlex.quote(raw)
-            if quoted in conversation:
-                conversation = conversation.replace(quoted, "YOUR_CONFIG_FILE") + (
-                    " (YOUR_CONFIG_FILE is the file you passed to --config.)"
+            if quoted in conversation or raw in conversation:
+                conversation = (
+                    conversation.replace(quoted, placeholder).replace(raw, placeholder)
+                    + f" ({placeholder} is {where}.)"
                 )
     text = " ".join(conversation.split())
     text = "".join(c for c in text if c >= " " and c != "\x7f")

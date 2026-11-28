@@ -84,6 +84,10 @@ Not yet published to PyPI.
   if the config now points at another Ollama.
 - `hai-model` and hai's Ollama messages no longer print a `user:password@`
   part of the Ollama address.
+- `hai-model` stops with "Cannot read config" when `providers.ollama.base_url`
+  is set but empty (for example `${OLLAMA_URL}` with the variable unset),
+  instead of using the local Ollama.
+- A download finishes as soon as Ollama reports success.
 - An unfinished Ollama address (such as `http://[::1`), a `models:` setting
   that isn't a section, or an empty `providers:` line no longer crashes
   `hai-model`.

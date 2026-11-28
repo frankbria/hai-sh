@@ -593,7 +593,9 @@ def pull_model(
                 total = sum(t for _, t in layers.values())
                 on_progress(PullProgress(status=status, completed=done, total=total))
             if status == "success":
+                # Done: don't wait for a server that keeps the stream open.
                 finished = True
+                break
     except requests.exceptions.RequestException as e:
         raise PullError(f"The connection to Ollama was lost during the download: {e}") from e
     finally:
