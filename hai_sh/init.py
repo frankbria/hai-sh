@@ -79,7 +79,12 @@ providers:
 
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"       # Install with: ollama pull gemma4:e2b
+    format: "schema"          # Make Ollama return hai's JSON reply format
+    temperature: 0
+    think: false              # Skip hidden reasoning (faster)
+    options:
+      num_predict: 1024       # Stop runaway answers
 
 # Context settings
 context:

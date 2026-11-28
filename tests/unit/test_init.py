@@ -308,3 +308,14 @@ def test_default_config_yaml_structure():
     # Test output settings
     assert "show_conversation" in config["output"]
     assert "use_colors" in config["output"]
+
+
+@pytest.mark.unit
+def test_default_config_template_ollama_settings():
+    """The ~/.hai/config.yaml template matches DEFAULT_CONFIG for Ollama."""
+    import yaml
+
+    from hai_sh.config import DEFAULT_CONFIG
+
+    parsed = yaml.safe_load(create_default_config())
+    assert parsed["providers"]["ollama"] == DEFAULT_CONFIG["providers"]["ollama"]

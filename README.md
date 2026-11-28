@@ -65,7 +65,7 @@ Commands with high confidence (≥85%) execute immediately. The explanation is s
 
 - **OpenAI**: GPT-4, GPT-4o, GPT-4o-mini, GPT-3.5-turbo
 - **Anthropic**: Claude Opus 4.5, Claude Sonnet 4.5
-- **Ollama**: Local models (llama3.2, mistral, codellama, etc.) - **recommended for daily use**
+- **Ollama**: Local models (default `gemma4:e2b`, or any other Ollama model) - **recommended for daily use**
 - **Local Models**: Custom GGUF model support
 
 ### Shell Integration
@@ -205,7 +205,7 @@ providers:
   # Ollama (free, local)
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: true
@@ -243,7 +243,7 @@ brew install ollama
 ollama serve
 
 # Pull model
-ollama pull llama3.2
+ollama pull gemma4:e2b
 ```
 
 ### Setting Up OpenAI
@@ -616,7 +616,7 @@ source ~/.bashrc
 ollama serve
 
 # Pull model
-ollama pull llama3.2
+ollama pull gemma4:e2b
 ```
 
 **📖 Full troubleshooting guide:** [INSTALL.md](./INSTALL.md#troubleshooting)

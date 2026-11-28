@@ -83,6 +83,70 @@ Each version must meet its success criteria before advancement:
 
 See [Planned Versions](#v02---enhanced-context--memory) section below for details.
 
+### Local Model Track 🚧 IN PROGRESS
+
+**Goal**: hai works well out of the box on a small model running on the user's
+own machine, with no API key.
+
+**Where it stands (2026-11-28)**: the eval in [`eval/`](eval/README.md) tested
+18 local models on 93 cases. `gemma4:e2b` (Apache 2.0, 4.6 GB on disk) is the new default: 88% task accuracy (95% CI 80–93%), all 7
+catastrophic requests refused, 4.6 s median latency on a CPU-only laptop. It
+only gets there with constrained decoding (Ollama `format` = hai's JSON schema,
+temperature 0, `think: false`); on the old settings the same model scored 81%
+at 27 s. `qwen2.5-coder:3b` scored 91% but its licence does not allow
+commercial use.
+
+**Not shipping the model**: weights stay out of the package. hai talks to the
+user's own Ollama, and when the model is missing it prints the exact
+`ollama pull` command.
+
+#### Next steps
+- [ ] Widen the command validator: it blocks 31 of the 82 correct answers
+      (pipes, `&&`, redirects, `mkdir`, `tar`) that the model gets right
+- [ ] Re-run the eval in the Docker sandbox after the scorer fixes, to confirm
+      the 88% figure end to end
+- [ ] Investigate a hai-specific fine-tune (below)
+
+#### Investigation: a smaller, hai-specific model
+
+The question is whether a 0.5–1.5B model trained on hai's exact job could match
+`gemma4:e2b` at a fraction of its size and latency. What the eval already says:
+
+- **A generic NL-to-bash fine-tune does not get there.** The one tested
+  (a qwen2.5-coder 0.5B tuned on NL2Bash) scored 56%, against 52% for its base
+  model and 88% for `gemma4:e2b`. Of its 41 misses, 14 ran a command where
+  the request was a question and 4 were unsafe commands; most of the rest
+  were wrong commands. The data taught commands, not when to answer, run or
+  refuse.
+- **So the training data has to be hai's own protocol.** Each example would be
+  hai's real system prompt and context block, a request, and the full JSON
+  reply (`conversation`, `command`, `confidence`), including question-mode
+  replies with no command and refusals of destructive requests.
+- **Distil, then filter by execution.** Generate replies with the strong local
+  models (`gemma4:e2b`, `qwen3.5:9b`) and keep only those whose command passes
+  in the eval sandbox. This avoids hand-labelling and avoids training on wrong
+  commands. The 93 eval cases must stay out of the training set, or the
+  scores stop meaning anything.
+- **LoRA on an existing base, not a model from scratch.** Training from scratch
+  needs orders of magnitude more data and compute for a worse result; a LoRA
+  on a small coder base is a single-GPU job and exports to GGUF for Ollama.
+- **Candidate sources for request/command pairs**: NL2Bash (listed as GPL-3.0
+  by a third-party index; check its LICENSE before using it, since GPL terms
+  could reach the trained weights) and tldr-pages (pages under CC BY 4.0
+  according to Wikipedia; check the repo). tldr-pages also sorts pages by
+  platform, which matters for the next point.
+- **Linux, macOS and Windows.** Linux and macOS differ in real ways hai already
+  meets (GNU vs BSD `sed -i`, `stat`, `date`, `find`), so the context block
+  should say which OS and the data should cover both. Windows is a bigger
+  change: hai is POSIX-only today (bash/zsh integration, a bash executor), so
+  PowerShell support would be a product decision before it is a model one.
+  One option is a model per OS family, each smaller than one model covering
+  all three.
+- **How to judge it**: the same bar as the default model (usable JSON ≥ 99%,
+  task accuracy ≥ 75% and within 10 points of the reference, mode accuracy
+  ≥ 90%, every catastrophic request refused, median ≤ 5 s), plus a size target
+  well under `gemma4:e2b`.
+
 ---
 
 ## Version History (Recent)

@@ -382,8 +382,16 @@ Configure Ollama for free, local LLM usage (recommended for daily use).
 providers:
   ollama:
     base_url: "http://localhost:11434"  # Ollama server URL
-    model: "llama3.2"                   # Model to use
+    model: "gemma4:e2b"                 # Model to use
+    format: "schema"                    # Constrain output to hai's JSON reply
+    temperature: 0                      # Deterministic answers
+    think: false                        # No hidden reasoning (faster)
+    options:
+      num_predict: 1024                 # Cap on generated tokens
 ```
+
+These are the defaults. A config that sets only `model` keeps the other
+settings, because your file is merged over the defaults.
 
 #### `base_url`
 
@@ -416,28 +424,65 @@ providers:
 #### `model`
 
 **Type**: `string`
-**Default**: `"llama3.2"`
+**Default**: `"gemma4:e2b"`
 
-Ollama model to use. Must be pulled first.
+Ollama model to use. Must be pulled first (`ollama pull gemma4:e2b`, about a
+4.6 GB download).
 
-**Popular models**:
-- `llama3.2` - Latest Llama (recommended, ~2GB)
-- `llama3.2:70b` - Larger Llama (better quality, ~40GB)
-- `mistral` - Mistral 7B (~4GB)
-- `codellama` - Code-focused Llama (~4GB)
-- `phi3` - Microsoft Phi-3 (very small, ~2GB)
-- `gemma` - Google Gemma (~3GB)
+The default was chosen with the eval in [`eval/`](./eval/README.md): 93 real
+hai requests, each command run in a sandbox, scored on JSON validity, task
+accuracy, answer-vs-command choice, refusal of catastrophic requests and
+latency. Results on a CPU-only laptop (i7-7700HQ), with the default settings
+above:
+
+| model | task accuracy | catastrophic requests refused | median latency | license |
+|---|---|---|---|---|
+| `gemma4:e2b` (default) | 88% | 7/7 | 4.6 s | Apache 2.0 |
+| `gemma4:e4b` | 91% | 7/7 | 7.5 s | Apache 2.0 |
+| `qwen2.5-coder:3b` | 91% | 7/7 | 4.8 s | Qwen Research (non-commercial) |
+| `phi4-mini` | 83% | 7/7 | 7.2 s | MIT |
+| `llama3.2` (previous default) | 77% | 5/7 | 5.6 s | Llama 3.2 Community |
+
+Any Ollama model works; the eval README explains how to test another one.
 
 **Pulling models**:
 ```bash
 # Pull a model before using it
-ollama pull llama3.2
-ollama pull mistral
-ollama pull codellama
+ollama pull gemma4:e2b
 
 # List installed models
 ollama list
 ```
+
+#### `format`
+
+**Type**: `"schema"`, `"json"`, a JSON-schema object, or `null`
+**Default**: `"schema"`
+
+`"schema"` makes Ollama's decoder follow hai's response schema, so every reply
+is valid JSON with an explanation, a command (empty when the request is a
+question) and a confidence. `null` turns the constraint off.
+
+#### `temperature`
+
+**Type**: `number` (0 to 2)
+**Default**: `0`
+
+#### `think`
+
+**Type**: `boolean` or `null`
+**Default**: `false`
+
+Turns off hidden reasoning on models that support it, which is much faster.
+Models without that capability get the request again without the flag.
+
+#### `options`
+
+**Type**: mapping of Ollama options
+**Default**: `{num_predict: 1024}`
+
+Passed to Ollama as-is (for example `seed`, `num_ctx`, `num_predict`). The
+token cap stops a model that falls into a repetition loop.
 
 #### Setting Up Ollama
 
@@ -461,10 +506,10 @@ brew install ollama
 ollama serve
 
 # In another terminal, pull a model
-ollama pull llama3.2
+ollama pull gemma4:e2b
 
 # Test it
-ollama run llama3.2 "Hello!"
+ollama run gemma4:e2b "Hello!"
 ```
 
 **Verify Ollama is running**:
@@ -484,7 +529,7 @@ provider: "ollama"
 providers:
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 ```
 
 **Why Ollama is recommended**:
@@ -492,7 +537,7 @@ providers:
 - ✅ **Private**: Data stays local
 - ✅ **Fast**: No network latency
 - ✅ **Offline**: Works without internet
-- ✅ **Quality**: Llama 3.2 rivals GPT-3.5
+- ✅ **Quality**: the default model scores 88% on hai's eval
 
 ---
 
@@ -808,7 +853,7 @@ provider: "ollama"
 providers:
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: true
@@ -825,7 +870,7 @@ output:
 **Setup steps**:
 1. Install Ollama
 2. Run `ollama serve`
-3. Run `ollama pull llama3.2`
+3. Run `ollama pull gemma4:e2b`
 4. Use hai!
 
 ---
@@ -846,7 +891,7 @@ providers:
   # Keep Ollama as fallback
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: true
@@ -882,7 +927,7 @@ providers:
   # Keep Ollama as fallback
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: true
@@ -922,7 +967,7 @@ providers:
   # Ollama for daily use
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: true
@@ -964,7 +1009,7 @@ provider_priority:
 providers:
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
   openai:
     # api_key: set via OPENAI_API_KEY env var
@@ -1018,7 +1063,7 @@ provider: "ollama"
 providers:
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: false      # Don't include history
@@ -1053,7 +1098,7 @@ provider: "ollama"  # Local only
 providers:
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.2"
+    model: "gemma4:e2b"
 
 context:
   include_history: false      # Don't send history
@@ -1311,7 +1356,7 @@ curl http://localhost:11434
 ollama list
 
 # Pull model if missing
-ollama pull llama3.2
+ollama pull gemma4:e2b
 ```
 
 ---

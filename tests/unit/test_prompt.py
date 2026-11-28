@@ -866,3 +866,11 @@ def test_validate_response_fields_confidence_out_of_range():
 
     assert is_valid is False
     assert "0" in error and "100" in error
+
+
+@pytest.mark.unit
+def test_parse_response_empty_command_means_question_mode():
+    """An empty command (as the schema-constrained provider emits) is dropped."""
+    parsed = parse_response('{"explanation": "A PID is a process id.", "command": "  ", "confidence": 90}')
+    assert "command" not in parsed
+    assert parsed["explanation"] == "A PID is a process id."

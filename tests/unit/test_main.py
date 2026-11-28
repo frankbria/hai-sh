@@ -156,6 +156,49 @@ def test_handle_provider_error():
 
 
 @pytest.mark.unit
+def test_handle_provider_error_custom_suggestion():
+    """A specific suggestion replaces the generic config hint."""
+    with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        handle_provider_error("Model missing", "Run: ollama pull gemma4:e2b")
+
+        output = mock_stderr.getvalue()
+        assert "Run: ollama pull gemma4:e2b" in output
+        assert "API keys" not in output
+
+
+@pytest.mark.unit
+def test_main_missing_ollama_model_prints_pull_command():
+    """When the model isn't pulled, hai tells the user the exact pull command."""
+    from hai_sh.providers.ollama import OllamaModelNotFoundError
+
+    mock_config = {
+        'provider': 'ollama',
+        'providers': {'ollama': {'base_url': 'http://localhost:11434', 'model': 'gemma4:e2b'}},
+    }
+    mock_fallback_result = Mock()
+    mock_fallback_result.provider = Mock()
+    mock_fallback_result.provider_name = 'ollama'
+    mock_fallback_result.had_fallback = False
+
+    with patch('sys.argv', ['hai', 'list', 'files']):
+        with patch('hai_sh.__main__.init_hai_directory', return_value=(True, None)):
+            with patch('hai_sh.__main__.load_config', return_value=mock_config):
+                with patch('hai_sh.__main__.get_available_provider', return_value=mock_fallback_result):
+                    with patch(
+                        'hai_sh.__main__.generate_with_retry',
+                        side_effect=OllamaModelNotFoundError('gemma4:e2b'),
+                    ):
+                        with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+                            with patch('sys.stdout', new_callable=io.StringIO):
+                                exit_code = main()
+
+    output = mock_stderr.getvalue()
+    assert exit_code == 1
+    assert "isn't installed in Ollama" in output
+    assert "ollama pull gemma4:e2b" in output
+
+
+@pytest.mark.unit
 def test_handle_execution_error():
     """Test execution error handler."""
     with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:

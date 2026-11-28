@@ -126,6 +126,31 @@ Response:
 - For questions: Provide clear, helpful answers"""
 
 
+# JSON schema for hai's response, for providers that support constrained
+# (grammar-based) decoding such as Ollama's ``format`` parameter. "command" is
+# optional so question-mode answers stay valid.
+RESPONSE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "explanation": {"type": "string"},
+        "command": {"type": "string"},
+        "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+    },
+    # "command" is required so that constrained decoding cannot skip it:
+    # with it optional, most small models closed the object straight after
+    # "explanation"/"confidence" and never emitted a command. An empty
+    # string means "no command" (question mode); parse_response drops it.
+    "required": ["explanation", "command", "confidence"],
+}
+
+# Appended to the system prompt when the schema constraint is on, so the
+# model knows how to express "no command" in a schema that requires the key.
+RESPONSE_SCHEMA_HINT = (
+    'Always include the "command" field. If the request is a question that '
+    'needs no command, set "command" to an empty string "".'
+)
+
+
 # Context template for variable substitution
 CONTEXT_TEMPLATE = """Current directory: {cwd}
 {git_context}
@@ -333,8 +358,9 @@ def parse_response(response: str) -> dict[str, Any]:
         "confidence": confidence
     }
 
-    # Add command if present
-    if "command" in data:
+    # Add command if present and non-empty (an empty string means
+    # question mode, e.g. from the schema-constrained Ollama provider)
+    if "command" in data and data["command"].strip():
         result["command"] = data["command"].strip()
 
     return result

@@ -620,10 +620,7 @@ def test_check_provider_availability_missing_provider():
 def test_check_provider_availability_invalid_config():
     """Test check_provider_availability with invalid config."""
     # OpenAI requires API key starting with sk-
-    success, provider, error = check_provider_availability(
-        "openai",
-        {"api_key": "invalid-key"}
-    )
+    success, provider, error = check_provider_availability("openai", {"api_key": "invalid-key"})
     assert success is False
     assert provider is None
     assert error is not None
@@ -634,8 +631,7 @@ def test_check_provider_availability_ollama_not_running():
     """Test check_provider_availability with unavailable Ollama."""
     # Use a port that shouldn't have Ollama running
     success, provider, error = check_provider_availability(
-        "ollama",
-        {"base_url": "http://localhost:99999", "model": "test"}
+        "ollama", {"base_url": "http://localhost:99999", "model": "test"}
     )
     assert success is False
     assert provider is None
@@ -650,9 +646,7 @@ def test_check_provider_availability_ollama_not_running():
 def test_provider_fallback_result_no_fallback():
     """Test ProviderFallbackResult when no fallback occurred."""
     result = ProviderFallbackResult(
-        provider="mock_provider",
-        provider_name="ollama",
-        failed_providers=[]
+        provider="mock_provider", provider_name="ollama", failed_providers=[]
     )
     assert result.had_fallback is False
     assert result.provider_name == "ollama"
@@ -666,7 +660,7 @@ def test_provider_fallback_result_with_fallback():
         provider_name="openai",
         failed_providers=[
             ("ollama", "Cannot connect to Ollama"),
-        ]
+        ],
     )
     assert result.had_fallback is True
     assert result.provider_name == "openai"
@@ -682,7 +676,7 @@ def test_provider_fallback_result_multiple_failures():
         failed_providers=[
             ("ollama", "Cannot connect to Ollama"),
             ("openai", "Invalid API key"),
-        ]
+        ],
     )
     assert result.had_fallback is True
     assert result.provider_name == "anthropic"
@@ -702,7 +696,7 @@ def test_get_available_provider_all_fail():
                 "base_url": "http://localhost:99999",  # Invalid port
                 "model": "test",
             }
-        }
+        },
     }
     with pytest.raises(ConfigError, match="No providers available"):
         get_available_provider(config)
@@ -718,7 +712,7 @@ def test_get_available_provider_single_provider_fails():
                 "base_url": "http://localhost:99999",  # Invalid port
                 "model": "test",
             }
-        }
+        },
     }
     with pytest.raises(ConfigError, match="No providers available"):
         get_available_provider(config)
@@ -741,8 +735,8 @@ def test_get_available_provider_callback_called():
             },
             "openai": {
                 "api_key": "invalid",  # Will fail validation
-            }
-        }
+            },
+        },
     }
 
     # Both should fail, but callback should be called when first fails
@@ -769,8 +763,8 @@ def test_get_available_provider_error_message_details():
             },
             "openai": {
                 "api_key": "invalid",
-            }
-        }
+            },
+        },
     }
 
     with pytest.raises(ConfigError) as exc_info:
@@ -781,3 +775,38 @@ def test_get_available_provider_error_message_details():
     assert "ollama" in error_message.lower()
     assert "openai" in error_message.lower()
     assert "Tried 2 provider" in error_message
+
+
+@pytest.mark.unit
+def test_default_ollama_settings_are_the_evaluated_ones():
+    """The default Ollama entry carries the settings the eval chose."""
+    ollama = DEFAULT_CONFIG["providers"]["ollama"]
+    assert ollama["model"] == "gemma4:e2b"
+    assert ollama["format"] == "schema"
+    assert ollama["temperature"] == 0
+    assert ollama["think"] is False
+    assert ollama["options"] == {"num_predict": 1024}
+
+
+@pytest.mark.unit
+def test_default_ollama_settings_build_a_constrained_payload():
+    """A provider built from the defaults asks Ollama for hai's schema."""
+    from hai_sh.prompt import RESPONSE_JSON_SCHEMA
+    from hai_sh.providers.ollama import OllamaProvider
+
+    provider = OllamaProvider(dict(DEFAULT_CONFIG["providers"]["ollama"]))
+    payload = provider.build_payload("list files", system_prompt="sys")
+    assert payload["model"] == "gemma4:e2b"
+    assert payload["format"] == RESPONSE_JSON_SCHEMA
+    assert payload["think"] is False
+    assert payload["options"] == {"temperature": 0, "num_predict": 1024}
+
+
+@pytest.mark.unit
+def test_user_model_override_keeps_default_ollama_settings():
+    """A config that only names another model still gets the constrained settings."""
+    merged = merge_configs(DEFAULT_CONFIG, {"providers": {"ollama": {"model": "llama3.2"}}})
+    ollama = merged["providers"]["ollama"]
+    assert ollama["model"] == "llama3.2"
+    assert ollama["format"] == "schema"
+    assert ollama["temperature"] == 0
