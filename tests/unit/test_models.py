@@ -1,5 +1,6 @@
 """Tests for hai_sh/models.py: catalog, licence policy, detection, pull, config edit."""
 
+import os
 import stat
 from pathlib import Path
 
@@ -539,7 +540,7 @@ class TestSecondReviewFixes:
         with pytest.raises(OSError):
             m.set_config_model(path, "b")
         assert path.read_text() == original
-        assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml", "config.yaml.bak"]
+        assert not [p for p in tmp_path.iterdir() if ".hai-tmp-" in p.name]
 
     def test_symlinked_config_keeps_its_link(self, tmp_path):
         real = tmp_path / "dotfiles" / "hai.yaml"
@@ -615,3 +616,45 @@ class TestSecondReviewFixes:
         )
         assert proc.returncode == 0, proc.stderr
         assert proc.stderr == ""
+
+
+class TestThirdReviewFixes:
+    def test_backup_symlink_is_replaced_not_followed(self, tmp_path):
+        other = tmp_path / "other.yaml"
+        other.write_text("precious: true\n")
+        path = tmp_path / "config.yaml"
+        original = 'providers:\n  ollama:\n    model: "a"\n'
+        path.write_text(original)
+        backup = tmp_path / "config.yaml.bak"
+        backup.symlink_to(other)
+        m.set_config_model(path, "b")
+        assert other.read_text() == "precious: true\n"
+        assert not backup.is_symlink() and backup.read_text() == original
+
+    def test_no_temp_file_means_no_change_and_a_clear_error(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.yaml"
+        original = 'providers:\n  ollama:\n    model: "a"\n'
+        path.write_text(original)
+        real_open = os.open
+
+        def no_new_files(p, flags, *a):
+            if ".hai-tmp-" in str(p):
+                raise PermissionError(13, "Permission denied")
+            return real_open(p, flags, *a)
+
+        monkeypatch.setattr(m.os, "open", no_new_files)
+        with pytest.raises(m.ConfigWriteError, match="Nothing was changed"):
+            m.set_config_model(path, "b")
+        assert path.read_text() == original
+
+    def test_disk_check_weighs_each_disks_own_reserve(self, tmp_path, monkeypatch):
+        small, big = tmp_path / "small", tmp_path / "big"
+        small.mkdir()
+        big.mkdir()
+        gb = 10**9
+        # 12 GB free of 50 GB (keeps 5 GB) vs 15 GB free of 500 GB (keeps 20 GB)
+        sizes = {small: (12 * gb, 50 * gb), big: (15 * gb, 500 * gb)}
+        monkeypatch.setattr(m, "disk_space", lambda p: sizes.get(p, (None, None)))
+        path, free, total = m.tightest_disk([small, big])
+        assert path == big
+        assert not m.check_pull(int(4.6 * gb), None, free, total, None).ok

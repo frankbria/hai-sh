@@ -406,7 +406,11 @@ def cmd_use(args: argparse.Namespace) -> int:
                 f"Note: {name} is not recommended under your licence policy ({entry.licence_name})."
             )
 
-    old, new = m.set_config_model(config_path, name)
+    try:
+        old, new = m.set_config_model(config_path, name)
+    except OSError as e:
+        print(f"Config not changed: {e}", file=sys.stderr)
+        return 1
     print(f"providers.ollama.model: {old or '(not set)'} -> {new}  ({config_path})")
     if config.get("provider", "ollama") != "ollama":
         print(

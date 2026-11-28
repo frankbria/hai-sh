@@ -513,7 +513,11 @@ def run_setup_wizard() -> int:
         config_updates["ollama_model"] = model
 
     # Write config
-    _write_setup_config(config_updates)
+    try:
+        _write_setup_config(config_updates)
+    except OSError as e:
+        print(gum.error(f"Config not saved: {e}"))
+        return 1
     print()
     print(gum.success(f"Configuration saved to ~/.hai/config.yaml"))
 
@@ -528,6 +532,29 @@ def run_setup_wizard() -> int:
     print()
     print(gum.success("Setup complete! Try: hai show disk usage"))
     return 0
+
+
+def apply_cli_overrides(
+    config: Dict[str, Any], provider: Optional[str], model: Optional[str]
+) -> None:
+    """
+    Apply ``--provider`` and ``--model`` to ``config`` for this one run.
+
+    ``provider_priority`` wins over ``provider``, so ``--provider`` also moves
+    that provider to the front of the list (the rest stay as fallbacks).
+    ``--model`` applies to whichever provider hai tries first.
+    """
+    if provider:
+        config['provider'] = provider
+        priority = config.get('provider_priority')
+        if priority:
+            config['provider_priority'] = [provider] + [p for p in priority if p != provider]
+    if model:
+        first = (config.get('provider_priority') or [config.get('provider', 'ollama')])[0]
+        providers_cfg = dict(config.get('providers') or {})
+        providers_cfg[first] = dict(providers_cfg.get(first) or {})
+        providers_cfg[first]['model'] = model
+        config['providers'] = providers_cfg
 
 
 def choose_setup_ollama_model(base_url: str) -> Optional[str]:
@@ -842,6 +869,7 @@ def main():
             config_path = Path(args.config) if args.config else None
             try:
                 config_dict = load_config(config_path=config_path, use_pydantic=False)
+                apply_cli_overrides(config_dict, args.provider, args.model)
                 validated_config, _warnings = validate_config_dict(config_dict)
                 return run_app_mode(validated_config, user_query)
             except ConfigLoadError as e:
@@ -859,23 +887,7 @@ def main():
             handle_config_error(str(e))
             return 1
 
-        # Override provider if --provider flag is set
-        if args.provider:
-            config['provider'] = args.provider
-            # provider_priority wins over provider, so put the requested one first
-            # (keeping the rest as fallbacks) or --provider would be ignored.
-            priority = config.get('provider_priority')
-            if priority:
-                config['provider_priority'] = [args.provider] + [
-                    p for p in priority if p != args.provider
-                ]
-
-        # One-shot model override for the provider hai will try first
-        if args.model:
-            first = (config.get('provider_priority') or [config.get('provider', 'ollama')])[0]
-            providers_cfg = config.setdefault('providers', {})
-            providers_cfg[first] = dict(providers_cfg.get(first) or {})
-            providers_cfg[first]['model'] = args.model
+        apply_cli_overrides(config, args.provider, args.model)
 
         # Once: tell v0.1.4 users who still run llama3.2 that the default moved
         model_flow.maybe_show_old_default_notice(config, args.suggest_only)

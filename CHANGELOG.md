@@ -19,6 +19,8 @@ Not yet published to PyPI.
   and `think: false`. A v0.1.4 config has none of these lines, so it gets them
   too, whatever model it uses. To keep v0.1.4's behaviour, add under
   `providers.ollama`: `format: null`, `temperature: 0.7`, `think: null`.
+- **Run `hai-install-shell` again** (then open a new shell) to get the fixed
+  Ctrl+X Ctrl+H binding below. pip doesn't update the copy in `~/.hai/`.
 - **New configs default to `gemma4:e2b`** (Apache 2.0, a 4.6 GB download).
   It isn't installed by `pip`; hai offers the download the first time you use
   it, or run `hai-model pull gemma4:e2b`.
@@ -34,10 +36,11 @@ Not yet published to PyPI.
 - `models.licence_policy` setting (`any` or `commercial`). With `commercial`,
   hai suggests `phi4-mini` instead of the non-commercial `qwen2.5-coder:3b`.
   The default model is always commercial-safe.
-- `hai --model NAME` uses another Ollama model for one question.
+- `hai --model NAME` uses another model for one question (also in `--app-mode`).
 - When the configured model isn't installed, `hai` offers to download it in a
   terminal, then another installed model, then a cloud provider you have
-  already configured (for that one question, after a privacy note). From the
+  already configured (for that one question, after a privacy note), also
+  after "see other models" if you cancel there. From the
   Ctrl+X Ctrl+H binding it returns a message with the command to run; in a
   pipe it prints the command and exits 1. It never downloads without a yes.
 - When Ollama isn't installed or running, hai prints the official install
@@ -47,12 +50,15 @@ Not yet published to PyPI.
   pick, and hai tells you the command to download it later.
 - `hai-model use` keeps a `config.yaml.bak`, keeps comments, and replaces the
   config atomically with mode 600, so a full disk or a Ctrl+C can't leave it
-  half written. A symlinked config keeps its link.
+  half written. A symlinked config keeps its link; a symlinked backup is
+  replaced, never written through. If the folder doesn't allow that, nothing
+  is changed and hai says why.
 - With `hai --config FILE`, the commands hai suggests include the same
   `--config FILE`.
 - Disk check before a download: refuses one that would leave less than 10% of
   the disk free (capped at 20 GB, never below 2 GB), unless `--force`. It
-  checks every place Ollama may keep models and goes by the fullest disk.
+  checks every place Ollama may keep models and goes by the disk with the
+  least room above its own reserve.
   Warns when a model would use over 70% of RAM.
 - CI runs the tests on Linux and macOS, Python 3.9 and 3.13, plus a job with
   the newest dependency versions.
@@ -65,6 +71,9 @@ Not yet published to PyPI.
 - The same binding failed on macOS's system Python 3.9, where urllib3 prints a
   LibreSSL warning on every start. hai now hides that warning; in
   `--suggest-only` it hides all Python warnings.
+- The Ctrl+X Ctrl+H binding failed on any reply containing a double quote,
+  such as `grep -rn "TODO" .`: it pasted the JSON into Python source, which
+  read JSON's `\"` as a Python escape. It now passes the JSON on stdin.
 - `hai setup` writes its config with mode 600 from the start (it may hold API
   keys) instead of tightening the mode after writing.
 

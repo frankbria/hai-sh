@@ -319,17 +319,27 @@ def ollama_models_dir() -> Optional[Path]:
     return dirs[0] if dirs else None
 
 
+def free_space_floor(disk_total: int) -> float:
+    """Bytes hai keeps free on a disk of this size: 10% (at most 20 GB), never under 2 GB."""
+    return max(min(MIN_FREE_FRACTION * disk_total, MAX_FRACTION_FLOOR_BYTES), MIN_FREE_BYTES)
+
+
 def tightest_disk(dirs: List[Path]) -> Tuple[Optional[Path], Optional[int], Optional[int]]:
     """
-    The directory in ``dirs`` whose disk has the least free space, with that
-    disk's (free, total). With no directory, the home disk. A download is only
-    allowed if it fits on every disk Ollama might be writing to.
+    Of the disks holding ``dirs``, the one with the least room above the
+    space hai keeps free on it (which depends on the disk's size), with its
+    (free, total). A download then passes only if it fits on every disk
+    Ollama might be writing to. With no directory, the home disk.
     """
     best: Tuple[Optional[Path], Optional[int], Optional[int]] = (None, None, None)
+    best_room: Optional[float] = None
     for path in dirs:
         free, total = disk_space(path)
-        if free is not None and (best[1] is None or free < best[1]):
-            best = (path, free, total)
+        if free is None or not total:
+            continue
+        room = free - free_space_floor(total)
+        if best_room is None or room < best_room:
+            best, best_room = (path, free, total), room
     if best[1] is None:
         free, total = disk_space(dirs[0] if dirs else None)
         best = (dirs[0] if dirs else None, free, total)
@@ -449,7 +459,7 @@ def check_pull(
     """
     result = PullCheck(ok=True)
     if download_bytes and disk_free is not None and disk_total:
-        floor = max(min(MIN_FREE_FRACTION * disk_total, MAX_FRACTION_FLOOR_BYTES), MIN_FREE_BYTES)
+        floor = free_space_floor(disk_total)
         left = disk_free - download_bytes
         if left < floor:
             msg = (
@@ -598,46 +608,46 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
         new_text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
 
     if config_path.exists():
-        _write_private(config_path.with_name(config_path.name + ".bak"), original)
+        # Replace the backup itself, even if it is a symlink: never write
+        # through it into whatever file it points to.
+        replace_private(
+            config_path.with_name(config_path.name + ".bak"), original, follow_symlink=False
+        )
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
     replace_private(config_path, new_text)
     return old, name
 
 
-def _write_private(path: Path, text: str) -> None:
-    """
-    Write ``text`` to ``path`` readable only by the owner. The file is created
-    with mode 600 (and an existing one is narrowed before anything is written),
-    so API keys in the config are never readable by others, even briefly.
-    """
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
-    try:
-        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            fd = -1
-            f.write(text)
-    finally:
-        if fd >= 0:
-            os.close(fd)
+class ConfigWriteError(OSError):
+    """The config could not be replaced safely; nothing was changed."""
 
 
-def replace_private(path: Path, text: str) -> None:
+def replace_private(path: Path, text: str, follow_symlink: bool = True) -> None:
     """
     Replace ``path`` with ``text`` atomically: write a mode-600 file next to it,
     flush it to disk, then rename it over the old one. If the disk fills up or
-    hai is stopped halfway, the old config is still there, whole. A symlinked
-    config (dotfiles) keeps its link; the file it points to is replaced.
+    hai is stopped halfway, the old file is still there, whole.
+
+    With ``follow_symlink`` (the config), a symlinked file (dotfiles) keeps
+    its link and the file it points to is replaced. Without it (the backup),
+    the link itself is replaced and its target is never touched.
+
+    Raises ConfigWriteError, leaving ``path`` unchanged, when the directory
+    doesn't allow the temporary file: hai never falls back to rewriting the
+    live file in place.
     """
-    target = Path(os.path.realpath(str(path)))
+    target = Path(os.path.realpath(str(path))) if follow_symlink else Path(path)
     tmp = target.with_name(f".{target.name}.hai-tmp-{os.getpid()}")
     try:
         fd = os.open(
             str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, stat.S_IRUSR | stat.S_IWUSR
         )
-    except OSError:
-        _write_private(target, text)  # directory not writable: write in place
-        return
+    except OSError as e:
+        raise ConfigWriteError(
+            f"Can't write {target}: hai needs to create a file in {target.parent} "
+            f"({e.strerror}). Nothing was changed.",
+        ) from e
     try:
         os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
         with os.fdopen(fd, "w", encoding="utf-8") as f:

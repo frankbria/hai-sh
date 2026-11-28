@@ -133,3 +133,20 @@ def test_ollama_down_says_what_to_run(shell, env):
     assert rc == "0", out
     assert line == ""
     assert "Ollama" in out
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_command_with_quotes_lands_on_the_prompt(shell, fake, env):
+    # Double quotes become \" in JSON; the old parser read those as Python
+    # escapes and failed on any quoted command.
+    fake.installed["gemma4:e2b"] = 1
+    fake.answer = {
+        "explanation": 'Finds "TODO" lines.',
+        "command": 'grep -rn "TODO" .',
+        "confidence": 90,
+    }
+    out, rc, line = run_binding(shell, "@hai find todo lines", env)
+    assert "Error parsing response" not in out, out
+    assert rc == "0", out
+    assert line == '\\grep -rn "TODO" .', out
+    assert 'Finds "TODO" lines.' in out

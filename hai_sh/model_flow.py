@@ -36,12 +36,19 @@ ProviderChoice = Tuple[Any, str]  # (provider instance, provider name)
 
 def suggest_only_json(conversation: str) -> str:
     """
-    The JSON the shell bindings read, with no command. Kept to one line with
-    no backslashes or triple quotes: the bash and zsh parsers embed the JSON in
-    a Python triple-quoted string, where an escaped newline would break it.
+    The JSON the shell bindings read, with no command. Shell integration
+    files installed before v0.1.5 embed the JSON in a Python triple-quoted
+    string, where any JSON escape (a quote, a control character, \\uXXXX)
+    breaks it, so hai's own messages contain none: one line, no backslashes,
+    no double quotes, no triple quotes.
     """
-    text = " ".join(conversation.split()).replace("\\", "/").replace("'''", "'")
-    return json.dumps({"conversation": text, "command": "", "confidence": 0})
+    text = " ".join(conversation.split())
+    text = "".join(c for c in text if c >= " " and c != "\x7f")
+    text = text.replace("\\", "/").replace('"', "'")
+    while "'''" in text:
+        text = text.replace("'''", "'")
+    # ensure_ascii=False: a \uXXXX escape is a backslash too.
+    return json.dumps({"conversation": text, "command": "", "confidence": 0}, ensure_ascii=False)
 
 
 def _catalog() -> Optional[m.Catalog]:
@@ -140,6 +147,10 @@ def missing_model_flow(
             if env_other.model_installed or consented_pull(env_other, picked, config_path=config_path):
                 _offer_default(picked, config_path)
                 return _ollama_provider(config, picked)
+        # Nothing picked or the download didn't happen: still offer the cloud.
+        cloud = offer_cloud(config)
+        if cloud:
+            return cloud
         return _stop(model, config_path)
 
     # Declined: an installed catalog model, then a configured cloud provider.
@@ -206,7 +217,11 @@ def _offer_default(name: str, config_path: Optional[Path]) -> None:
 
         config_path = get_config_path()
     if ask(f"Make {name} your default model?", "yN") == "y":
-        old, new = m.set_config_model(config_path, name)
+        try:
+            old, new = m.set_config_model(config_path, name)
+        except OSError as e:
+            print(f"Config not changed: {e}")
+            return
         print(f"providers.ollama.model: {old or '(not set)'} -> {new}")
     else:
         print(f"Using {name} for this question only. To keep it: hai-model use {name}")

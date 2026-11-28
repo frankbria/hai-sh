@@ -614,3 +614,51 @@ def test_setup_config_is_private_from_the_start(home, monkeypatch):
     path = get_config_path()
     assert oct(path.stat().st_mode & 0o777) == "0o600"
     assert "sk-test" in path.read_text()
+
+
+def test_suggest_only_json_strips_every_json_escape():
+    raw = 'Ollama at "http://h:1/a\\"b" \x1b[31mred\x07 café ’'
+    out = model_flow.suggest_only_json(raw)
+    assert "\\" not in out and "'''" not in out
+    assert json.loads(out)["conversation"] == "Ollama at 'http://h:1/a/'b' [31mred café ’"
+
+
+def test_other_models_cancel_still_offers_configured_cloud(home, fake, capfd, monkeypatch):
+    write_config(home, fake.url, extra="  openai:\n    api_key: sk-test\n    model: gpt-4o-mini\n")
+    terminal(monkeypatch, "o", "y")  # see other models, cancel, then use the cloud
+    monkeypatch.setattr("hai_sh.gum.choose", lambda options, header="": "Cancel")
+    cloud = Mock()
+    cloud.generate.return_value = json.dumps({"explanation": "From the cloud.", "confidence": 80})
+    real_get = __import__("hai_sh.providers", fromlist=["get_provider"]).get_provider
+    monkeypatch.setattr(
+        "hai_sh.providers.get_provider",
+        lambda name, cfg: cloud if name == "openai" else real_get(name, cfg),
+    )
+    assert run_hai("what", "is", "this") == 0
+    assert "From the cloud." in capfd.readouterr().out
+    assert fake.pull_requests == []
+
+
+def test_apply_cli_overrides():
+    from hai_sh.__main__ import apply_cli_overrides
+
+    shared = {"model": "a"}
+    config = {"provider_priority": ["ollama", "openai"], "providers": {"ollama": shared}}
+    apply_cli_overrides(config, "openai", "gpt-4o-mini")
+    assert config["provider_priority"] == ["openai", "ollama"]
+    assert config["providers"]["openai"]["model"] == "gpt-4o-mini"
+    assert shared == {"model": "a"}  # the loaded config isn't changed in place
+
+
+def test_app_mode_gets_the_model_flag(home, fake, monkeypatch):
+    write_config(home, fake.url)
+    seen = {}
+
+    def validate(config):
+        seen["config"] = config
+        return config, []
+
+    monkeypatch.setattr("hai_sh.__main__.validate_config_dict", validate)
+    monkeypatch.setattr("hai_sh.__main__.run_app_mode", lambda cfg, query: 0)
+    assert run_hai("--app-mode", "--model", "phi4-mini", "list", "files") == 0
+    assert seen["config"]["providers"]["ollama"]["model"] == "phi4-mini"
