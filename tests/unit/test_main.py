@@ -195,7 +195,7 @@ def test_main_missing_ollama_model_prints_pull_command():
     output = mock_stderr.getvalue()
     assert exit_code == 1
     assert "isn't installed in Ollama" in output
-    assert "ollama pull gemma4:e2b" in output
+    assert "hai-model pull gemma4:e2b" in output
 
 
 @pytest.mark.unit

@@ -15,6 +15,10 @@ Complete guide for configuring hai-sh to work with your preferred LLM provider a
   - [Anthropic Setup](#anthropic-setup)
   - [Ollama Setup (Local)](#ollama-setup-local)
   - [Local Model Setup](#local-model-setup)
+- [Models](#models)
+  - [hai-model](#hai-model)
+  - [licence_policy](#licence_policy)
+  - [Upgrading from v0.1.4](#upgrading-from-v014)
 - [Context Settings](#context-settings)
 - [Output Settings](#output-settings)
 - [Example Configurations](#example-configurations)
@@ -426,8 +430,11 @@ providers:
 **Type**: `string`
 **Default**: `"gemma4:e2b"`
 
-Ollama model to use. Must be pulled first (`ollama pull gemma4:e2b`, about a
-4.6 GB download).
+Ollama model to use. Must be pulled first (`hai-model pull gemma4:e2b` or
+`ollama pull gemma4:e2b`, about a 4.6 GB download). If it isn't, `hai` offers
+the download the first time you ask something; see [Models](#models).
+`hai --model NAME` uses another model for one question without changing this
+setting.
 
 The default was chosen with the eval in [`eval/`](./eval/README.md): 93 real
 hai requests, each command run in a sandbox, scored on JSON validity, task
@@ -447,11 +454,14 @@ Any Ollama model works; the eval README explains how to test another one.
 
 **Pulling models**:
 ```bash
-# Pull a model before using it
-ollama pull gemma4:e2b
+# Pull a model before using it (shows size, free disk and licence, then asks)
+hai-model pull gemma4:e2b
 
-# List installed models
-ollama list
+# hai's tested models and what you have installed
+hai-model list
+
+# Make another model the default
+hai-model use phi4-mini
 ```
 
 #### `format`
@@ -592,6 +602,85 @@ providers:
 ```
 
 **Note**: Local model support requires additional dependencies. See [INSTALL.md](./INSTALL.md) for details.
+
+---
+
+## Models
+
+hai ships a small catalog of Ollama models it has been tested with
+(`hai_sh/data/models.yaml`): the name, download size, licence and eval scores
+of each. hai never bundles a model; Ollama downloads it, and only after you say
+yes.
+
+### `hai-model`
+
+```bash
+hai-model status          # Ollama version, the configured model, installed or not
+hai-model list            # recommended models (filtered by licence_policy) and installed ones
+hai-model pull NAME       # download, after showing size, free disk and licence
+hai-model use NAME        # set providers.ollama.model, offering the download if needed
+```
+
+Options:
+
+- `hai-model --config FILE ...` works on another config file.
+- `pull --yes` skips the question (needed when there is no terminal, for
+  example in a script). Without a terminal and without `--yes`, nothing is
+  downloaded and hai prints the command to run.
+- `pull --force` downloads even when the disk check says no.
+- `use --no-pull` sets the model without downloading it.
+
+`hai-model use` changes only the `model:` line under `providers.ollama`,
+keeping your comments, and saves the previous file as `config.yaml.bak`.
+
+**Disk check**: hai won't start a download that would leave less free space
+than 10% of the disk, capped at 20 GB, and never less than 2 GB. It warns when
+a model would use more than 70% of your RAM. Both checks apply only when Ollama
+runs on this machine.
+
+**When the model is missing**, `hai "<question>"`:
+
+- in a terminal, shows the size, free disk and licence and asks whether to
+  download it (Enter means No). If you say no it offers another installed
+  model from the catalog, then any cloud provider you have already configured
+  (for that one question, with a privacy note).
+- from the Ctrl+X Ctrl+H binding (`--suggest-only`), prints its usual JSON
+  with an empty command and the `hai-model pull` command to run.
+- in a pipe or script, prints the command to run and exits with status 1.
+
+**When Ollama isn't installed or running**, hai prints the official install
+command (or `ollama serve`) and never runs it.
+
+### `licence_policy`
+
+```yaml
+models:
+  licence_policy: "any"   # or "commercial"
+```
+
+**Type**: `"any"` or `"commercial"`
+**Default**: `"any"`
+
+The default model is always licensed for commercial use. `qwen2.5-coder:3b`
+is not (Qwen Research licence, non-commercial use only). With `commercial`,
+hai-model list, the setup wizard and the missing-model menu suggest
+`phi4-mini` instead. Models you choose yourself are never blocked; hai only
+says when one doesn't fit the policy.
+
+### Upgrading from v0.1.4
+
+- Your `model:` setting is kept. If it is still `llama3.2` (the old default),
+  hai shows a one-time note in a terminal with the eval numbers and the
+  command to switch: `hai-model use gemma4:e2b`. It never changes the file.
+- A v0.1.4 config has no `format`, `temperature` or `think` lines, so it now
+  gets the new defaults (`"schema"`, `0`, `false`), whatever model you use.
+  To get v0.1.4's behaviour back, add under `providers.ollama`:
+
+  ```yaml
+      format: null
+      temperature: 0.7
+      think: null
+  ```
 
 ---
 

@@ -53,6 +53,7 @@ dev = [
 [project.scripts]
 hai = "hai_sh.__main__:main"
 hai-install-shell = "hai_sh.install_shell:main"
+hai-model = "hai_sh.model_cli:main"
 
 [project.urls]
 Repository = "https://github.com/frankbria/hai-sh"
@@ -64,6 +65,7 @@ packages = ["hai_sh", "hai_sh.providers", "hai_sh.integrations"]
 
 [tool.setuptools.package-data]
 hai_sh = [
+    "data/*.yaml",
     "integrations/*.sh",
     "integrations/*.md"
 ]

@@ -22,7 +22,8 @@ from hai_sh.prompt import build_system_prompt, generate_with_retry, collect_cont
 from hai_sh.executor import execute_command
 from hai_sh import gum
 from hai_sh.memory import MemoryManager
-from hai_sh.providers.ollama import OllamaModelNotFoundError
+from hai_sh.providers.ollama import DEFAULT_OLLAMA_MODEL, OllamaModelNotFoundError
+from hai_sh import model_flow
 from hai_sh.output import should_use_color
 from hai_sh.schema import validate_config_dict
 
@@ -198,6 +199,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--provider",
         metavar="NAME",
         help="switch LLM provider for this invocation (openai, anthropic, ollama)"
+    )
+
+    parser.add_argument(
+        "--model",
+        metavar="NAME",
+        help="use this model for this invocation only (see: hai-model list)"
     )
 
     parser.add_argument(
@@ -499,13 +506,11 @@ def run_setup_wizard() -> int:
         )
         if base_url:
             config_updates["ollama_base_url"] = base_url
-        model = gum.input_text(
-            placeholder="Model name",
-            value="gemma4:e2b",
-            prompt_str="Model: ",
-        )
-        if model:
-            config_updates["ollama_model"] = model
+        model = choose_setup_ollama_model(base_url or "http://localhost:11434")
+        if model is None:
+            print("Setup cancelled.")
+            return 0
+        config_updates["ollama_model"] = model
 
     # Write config
     _write_setup_config(config_updates)
@@ -523,6 +528,74 @@ def run_setup_wizard() -> int:
     print()
     print(gum.success("Setup complete! Try: hai show disk usage"))
     return 0
+
+
+def choose_setup_ollama_model(base_url: str) -> Optional[str]:
+    """
+    Pick the Ollama model in the setup wizard: catalog models, installed ones
+    first, then the consented download. Returns None if the user cancels.
+    """
+    from hai_sh import models as m
+    from hai_sh.model_cli import consented_pull
+
+    env = m.detect_environment(base_url, DEFAULT_OLLAMA_MODEL)
+    try:
+        catalog = m.load_catalog()
+    except m.CatalogError:
+        catalog = None
+
+    if not env.running:
+        print()
+        for line in model_flow.ollama_problem_lines(env):
+            print(line)
+        print(
+            f"hai will use {DEFAULT_OLLAMA_MODEL}. Once Ollama runs, install it with: "
+            f"hai-model pull {DEFAULT_OLLAMA_MODEL}"
+        )
+        return DEFAULT_OLLAMA_MODEL
+
+    try:
+        from hai_sh.config import load_config
+
+        policy = m.effective_licence_policy(load_config(use_pydantic=False))
+    except Exception:
+        policy = m.effective_licence_policy(None)
+
+    options = {}
+    entries = catalog.recommended(policy) if catalog else []
+    entries = sorted(entries, key=lambda e: m.find_installed(e.name, env.installed) is None)
+    for e in entries:
+        have = "installed" if m.find_installed(e.name, env.installed) else (
+            f"{m.format_bytes(e.download_bytes)} download"
+        )
+        tag = "recommended" if e.role == "default" else e.role
+        label = (
+            f"{e.name} ({tag}): {m.percent(e.task_accuracy)} on hai's test, "
+            f"{e.median_latency_s:g} s, {e.licence_name}, {have}"
+        )
+        options[label] = e.name
+    other_installed = [
+        x.name for x in (env.installed or []) if not (catalog and catalog.get(x.name))
+    ]
+    for name in other_installed:
+        options[f"{name} (installed, untested with hai)"] = name
+    other = "Another model (type its name)"
+    choice = gum.choose(list(options) + [other], header="Choose the local model:")
+    if not choice:
+        return None
+    if choice == other:
+        typed = gum.input_text(placeholder="Model name", prompt_str="Model: ")
+        if not typed:
+            return None
+        model = typed.strip()
+    else:
+        model = options[choice]
+
+    model_env = m.detect_environment(base_url, model)
+    if not model_env.model_installed:
+        print()
+        consented_pull(model_env, model)
+    return model
 
 
 def _write_setup_config(updates: dict) -> None:
@@ -566,12 +639,17 @@ def _write_setup_config(updates: dict) -> None:
         "",
         "  ollama:",
         f'    base_url: "{updates.get("ollama_base_url", "http://localhost:11434")}"',
-        f'    model: "{updates.get("ollama_model", "gemma4:e2b")}"',
+        f'    model: "{updates.get("ollama_model", DEFAULT_OLLAMA_MODEL)}"',
         '    format: "schema"',
         "    temperature: 0",
         "    think: false",
         "    options:",
         "      num_predict: 1024",
+        "",
+        "# Which local models hai recommends: \"any\", or \"commercial\" for",
+        "# only models whose licence allows commercial use.",
+        "models:",
+        '  licence_policy: "any"',
         "",
         "context:",
         "  include_history: true",
@@ -762,6 +840,18 @@ def main():
         if args.provider:
             config['provider'] = args.provider
 
+        # One-shot model override for the provider hai will try first
+        if args.model:
+            first = args.provider or (
+                config.get('provider_priority') or [config.get('provider', 'ollama')]
+            )[0]
+            providers_cfg = config.setdefault('providers', {})
+            providers_cfg[first] = dict(providers_cfg.get(first) or {})
+            providers_cfg[first]['model'] = args.model
+
+        # Once: tell v0.1.4 users who still run llama3.2 that the default moved
+        model_flow.maybe_show_old_default_notice(config, args.suggest_only)
+
         # Initialize memory manager
         memory_manager = MemoryManager(config)
         memory_manager.load_all()
@@ -789,6 +879,8 @@ def main():
         # Define fallback callback for user feedback
         def handle_fallback(failed_provider: str, error: str, next_provider: str):
             """Print fallback message when switching providers."""
+            if args.suggest_only:
+                return  # the shell binding reads stdout and stderr as one stream
             # Truncate error message if too long
             short_error = error[:50] + "..." if len(error) > 50 else error
             print(
@@ -808,15 +900,31 @@ def main():
             provider_name = result.provider_name
 
             # Report successful provider selection if fallback occurred
-            if result.had_fallback:
+            if result.had_fallback and not args.suggest_only:
                 print(
                     f"{SUCCESS}Using provider '{provider_name}'{RESET}",
                     file=sys.stderr
                 )
 
         except ConfigLoadError as e:
-            handle_provider_error(str(e))
-            return 1
+            chain = config.get('provider_priority') or [config.get('provider', 'ollama')]
+            lines = model_flow.ollama_unavailable_lines(config) if 'ollama' in chain else None
+            if lines is None:
+                handle_provider_error(str(e))
+                return 1
+            if args.suggest_only:
+                print(model_flow.suggest_only_json(model_flow.ollama_unavailable_message(lines)))
+                return 0
+            if len(chain) > 1:
+                handle_provider_error(str(e))
+            if not model_flow.is_interactive():
+                for line in lines:
+                    print(line, file=sys.stderr)
+                return 1
+            choice = model_flow.ollama_unavailable_flow(config, lines)
+            if choice is None:
+                return 1
+            provider, provider_name = choice
 
         # Generate command using LLM
         if debug_mode:
@@ -824,22 +932,42 @@ def main():
             print(f"Debug: Query: {user_query}", file=sys.stderr)
             print(f"Debug: System prompt: {system_prompt[:100]}...", file=sys.stderr)
 
-        try:
-            # Generate with retry - show spinner during LLM processing
-            response = gum.spin(
-                "hai is thinking...",
-                generate_with_retry,
-                provider=provider,
+        def generate(llm_provider):
+            kwargs = dict(
+                provider=llm_provider,
                 prompt=user_query,
                 context=context,
                 max_retries=3,
                 system_prompt=system_prompt,
             )
+            if args.suggest_only:
+                # No spinner: without gum, the shell binding captures stderr
+                # together with stdout and must get nothing but the JSON.
+                return generate_with_retry(**kwargs)
+            return gum.spin("hai is thinking...", generate_with_retry, **kwargs)
 
+        try:
+            try:
+                response = generate(provider)
+            except OllamaModelNotFoundError as e:
+                if args.suggest_only:
+                    print(model_flow.suggest_only_json(model_flow.missing_model_message(e.model)))
+                    return 0
+                if not model_flow.is_interactive():
+                    handle_provider_error(
+                        f"Model '{e.model}' isn't installed in Ollama.",
+                        model_flow.missing_model_hint(e.model),
+                    )
+                    return 1
+                choice = model_flow.missing_model_flow(config, e.model, config_path)
+                if choice is None:
+                    return 1
+                provider, provider_name = choice
+                response = generate(provider)
         except OllamaModelNotFoundError as e:
             handle_provider_error(
                 f"Model '{e.model}' isn't installed in Ollama.",
-                f"Run: ollama pull {e.model}",
+                f"Run: hai-model pull {e.model}",
             )
             return 1
         except Exception as e:

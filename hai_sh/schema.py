@@ -9,6 +9,8 @@ from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
+from hai_sh.providers.ollama import DEFAULT_OLLAMA_MODEL
+
 
 class LLMResponse(BaseModel):
     """
@@ -143,7 +145,7 @@ class OllamaProviderConfig(BaseModel):
         description="Ollama API endpoint",
     )
     model: str = Field(
-        default="gemma4:e2b",
+        default=DEFAULT_OLLAMA_MODEL,
         description="Ollama model to use",
     )
     format: Optional[Union[str, dict[str, Any]]] = Field(
@@ -380,6 +382,19 @@ class ExecutionConfig(BaseModel):
         return v
 
 
+class ModelsConfig(BaseModel):
+    """Which local models hai may recommend."""
+
+    licence_policy: Literal["any", "commercial"] = Field(
+        default="any",
+        description=(
+            '"any" recommends every model in hai\'s catalog; "commercial" only '
+            "models whose licence allows commercial use. A stricter policy "
+            "built into hai wins over this setting."
+        ),
+    )
+
+
 class HaiConfig(BaseModel):
     """Main hai-sh configuration schema."""
 
@@ -412,6 +427,10 @@ class HaiConfig(BaseModel):
     memory: MemoryConfig = Field(
         default_factory=MemoryConfig,
         description="Memory system settings",
+    )
+    models: ModelsConfig = Field(
+        default_factory=ModelsConfig,
+        description="Local model recommendations (licence policy)",
     )
 
     @field_validator("provider")

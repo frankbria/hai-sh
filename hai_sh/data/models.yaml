@@ -1,0 +1,88 @@
+# Recommended Ollama models for hai.
+#
+# This file is the single source of truth for what hai recommends. Every
+# number below was measured, not estimated; see docs/design/model-management.md
+# section 6 for the rules.
+#
+#   download_bytes   on-disk size from Ollama's /api/tags after the eval pulled it
+#   loaded_bytes     size from /api/ps once loaded, or null where the measured
+#                    value has not been re-checked (hai then uses download_bytes
+#                    as the memory estimate, which errs on the safe side)
+#   task_accuracy    share of the eval's 93 cases answered correctly, with a 95%
+#                    Wilson interval in accuracy_ci
+#   refused          catastrophic requests refused, out of 7
+#   median_latency_s median seconds per answer on the hardware below
+#   licence          SPDX id where one exists; licence_name is what users see
+#   commercial_use   read from the model card by a person, on licence_checked
+#
+# Roles: exactly one "default"; "lighter" and "stronger" are ordered lists,
+# best first. licence_policy "commercial" skips entries whose commercial_use is
+# false, so every role keeps at least one commercial-safe entry (tested).
+#
+# The default must equal hai_sh.providers.ollama.DEFAULT_OLLAMA_MODEL (tested).
+
+schema_version: 1
+eval_run: eval-results/2026-11-27
+hardware: "i7-7700HQ, 8 threads, 31 GiB RAM, CPU-only, Ollama 0.40.18"
+cases: 93
+
+models:
+  - name: gemma4:e2b
+    role: default
+    parameters: "4.6B"
+    download_bytes: 4587156505
+    loaded_bytes: null            # /api/ps reported 1083032206; not yet re-checked
+    task_accuracy: 0.88
+    accuracy_ci: [0.80, 0.93]
+    refused: 7
+    median_latency_s: 4.6
+    licence: Apache-2.0
+    licence_name: "Apache 2.0"
+    commercial_use: true
+    licence_checked: "2026-11-28"
+    clears_bar: true
+
+  - name: qwen2.5-coder:3b
+    role: lighter
+    parameters: "3.1B"
+    download_bytes: 1929912626
+    loaded_bytes: 2168360795
+    task_accuracy: 0.91
+    accuracy_ci: [0.84, 0.96]
+    refused: 7
+    median_latency_s: 4.8
+    licence: LicenseRef-Qwen-Research
+    licence_name: "Qwen Research, non-commercial use only"
+    commercial_use: false
+    licence_checked: "2026-11-27"
+    clears_bar: true
+
+  - name: phi4-mini
+    role: lighter
+    parameters: "3.8B"
+    download_bytes: 2491876774
+    loaded_bytes: 3107297688
+    task_accuracy: 0.83
+    accuracy_ci: [0.74, 0.89]
+    refused: 7
+    median_latency_s: 7.2
+    licence: MIT
+    licence_name: "MIT"
+    commercial_use: true
+    licence_checked: "2026-11-28"
+    clears_bar: false        # 7.2 s median is over the 5 s line
+
+  - name: gemma4:e4b
+    role: stronger
+    parameters: "7.5B"
+    download_bytes: 6583656505
+    loaded_bytes: null            # /api/ps reported 1974321805; not yet re-checked
+    task_accuracy: 0.91
+    accuracy_ci: [0.84, 0.96]
+    refused: 7
+    median_latency_s: 7.5
+    licence: Apache-2.0
+    licence_name: "Apache 2.0"
+    commercial_use: true
+    licence_checked: "2026-11-28"
+    clears_bar: false        # 7.5 s median is over the 5 s line

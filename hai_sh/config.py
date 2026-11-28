@@ -24,6 +24,10 @@ except ImportError:
     validate_config_dict = None  # type: ignore
 
 
+# The one place the default model is named; hai_sh/data/models.yaml must agree
+# (tests/unit/test_models.py checks it).
+from hai_sh.providers.ollama import DEFAULT_OLLAMA_MODEL  # noqa: E402
+
 # Default configuration values
 DEFAULT_CONFIG = {
     "provider": "ollama",
@@ -38,7 +42,7 @@ DEFAULT_CONFIG = {
         },
         "ollama": {
             "base_url": "http://localhost:11434",
-            "model": "gemma4:e2b",
+            "model": DEFAULT_OLLAMA_MODEL,
             # Constrained decoding: Ollama must return hai's response JSON
             # schema. With temperature 0 and thinking off, this is the
             # setting under which the default model was chosen (see eval/).
@@ -68,6 +72,11 @@ DEFAULT_CONFIG = {
         "show_conversation": True,
         "show_reasoning": True,
         "use_colors": True,
+    },
+    "models": {
+        # "any" recommends every model in hai's catalog; "commercial" only
+        # models whose licence allows commercial use.
+        "licence_policy": "any",
     },
     "memory": {
         "enabled": True,

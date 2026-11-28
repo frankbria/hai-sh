@@ -1,0 +1,450 @@
+"""Tests for hai_sh/models.py: catalog, licence policy, detection, pull, config edit."""
+
+import stat
+from pathlib import Path
+
+import pytest
+import yaml
+
+from hai_sh import models as m
+from hai_sh.providers.ollama import DEFAULT_OLLAMA_MODEL
+from tests.fake_ollama import FakeOllama
+
+
+@pytest.fixture
+def fake():
+    server = FakeOllama().start()
+    yield server
+    server.stop()
+
+
+# --------------------------------------------------------------------------
+# Catalog
+# --------------------------------------------------------------------------
+
+
+class TestCatalog:
+    def test_shipped_catalog_parses(self):
+        catalog = m.load_catalog()
+        assert catalog.schema_version == 1
+        assert catalog.cases == 93
+        assert len(catalog.models) >= 3
+
+    def test_exactly_one_default_and_it_matches_the_code(self):
+        catalog = m.load_catalog()
+        defaults = [e for e in catalog.models if e.role == "default"]
+        assert len(defaults) == 1
+        assert defaults[0].name == DEFAULT_OLLAMA_MODEL
+
+    def test_default_is_commercial_safe(self):
+        # The licence carve-out must never leave hai without a default.
+        assert m.load_catalog().default.commercial_use is True
+
+    @pytest.mark.parametrize("role", m.ROLES)
+    def test_every_role_has_a_commercial_entry(self, role):
+        catalog = m.load_catalog()
+        if catalog.by_role(role, "any"):
+            assert catalog.by_role(role, "commercial"), role
+
+    def test_default_clears_the_bar(self):
+        assert m.load_catalog().default.clears_bar is True
+
+    def test_entries_are_plausible(self):
+        for e in m.load_catalog().models:
+            assert e.download_bytes > 100_000_000, e.name
+            assert 0 < e.task_accuracy <= 1
+            assert e.accuracy_ci[0] <= e.task_accuracy <= e.accuracy_ci[1]
+            assert 0 <= e.refused <= 7
+            assert e.licence and e.licence_checked
+            assert e.memory_bytes > 0
+
+    def test_lighter_order_follows_policy(self):
+        catalog = m.load_catalog()
+        assert catalog.by_role("lighter", "any")[0].name == "qwen2.5-coder:3b"
+        assert catalog.by_role("lighter", "commercial")[0].name == "phi4-mini"
+
+    def test_recommended_puts_default_first(self):
+        assert m.load_catalog().recommended()[0].role == "default"
+
+    def test_get_is_tag_insensitive(self):
+        catalog = m.load_catalog()
+        assert catalog.get("phi4-mini:latest").name == "phi4-mini"
+        assert catalog.get("nope") is None
+
+    def test_memory_falls_back_to_download_size(self):
+        e = m.load_catalog().default
+        assert e.loaded_bytes is None
+        assert e.memory_bytes == e.download_bytes
+
+    def _write(self, tmp_path, data):
+        p = tmp_path / "models.yaml"
+        p.write_text(yaml.safe_dump(data))
+        return p
+
+    def test_rejects_two_defaults(self, tmp_path):
+        data = yaml.safe_load(m.CATALOG_PATH.read_text())
+        data["models"][1]["role"] = "default"
+        with pytest.raises(m.CatalogError):
+            m.load_catalog(self._write(tmp_path, data))
+
+    def test_rejects_unknown_role(self, tmp_path):
+        data = yaml.safe_load(m.CATALOG_PATH.read_text())
+        data["models"][1]["role"] = "best"
+        with pytest.raises(m.CatalogError):
+            m.load_catalog(self._write(tmp_path, data))
+
+    def test_rejects_missing_field(self, tmp_path):
+        data = yaml.safe_load(m.CATALOG_PATH.read_text())
+        del data["models"][0]["download_bytes"]
+        with pytest.raises(m.CatalogError):
+            m.load_catalog(self._write(tmp_path, data))
+
+    def test_rejects_wrong_schema_version(self, tmp_path):
+        with pytest.raises(m.CatalogError):
+            m.load_catalog(self._write(tmp_path, {"schema_version": 2, "models": []}))
+
+    def test_missing_file(self, tmp_path):
+        with pytest.raises(m.CatalogError):
+            m.load_catalog(tmp_path / "absent.yaml")
+
+
+class TestLicencePolicy:
+    def test_package_default_is_any(self):
+        assert m.DEFAULT_LICENCE_POLICY == "any"
+
+    def test_user_can_tighten(self):
+        assert (
+            m.effective_licence_policy({"models": {"licence_policy": "commercial"}}) == "commercial"
+        )
+
+    def test_default_and_unknown_values_mean_any(self):
+        assert m.effective_licence_policy(None) == "any"
+        assert m.effective_licence_policy({}) == "any"
+        assert m.effective_licence_policy({"models": {"licence_policy": "whatever"}}) == "any"
+
+    def test_package_commercial_wins_over_user_any(self, monkeypatch):
+        monkeypatch.setattr(m, "DEFAULT_LICENCE_POLICY", "commercial")
+        assert m.effective_licence_policy({"models": {"licence_policy": "any"}}) == "commercial"
+
+    def test_commercial_hides_non_commercial(self):
+        names = [e.name for e in m.load_catalog().recommended("commercial")]
+        assert "qwen2.5-coder:3b" not in names
+        assert DEFAULT_OLLAMA_MODEL in names
+
+
+# --------------------------------------------------------------------------
+# Names and detection
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "given, expected",
+    [
+        ("llama3.2", "llama3.2:latest"),
+        ("llama3.2:latest", "llama3.2:latest"),
+        ("gemma4:e2b", "gemma4:e2b"),
+        ("library/phi4-mini", "library/phi4-mini:latest"),
+        ("registry.example:5000/x/model", "registry.example:5000/x/model:latest"),
+        ("hf.co/org/Model-GGUF", "hf.co/org/Model-GGUF"),
+        ("  qwen2.5-coder:3b ", "qwen2.5-coder:3b"),
+        ("", ""),
+    ],
+)
+def test_normalise_name(given, expected):
+    assert m.normalise_name(given) == expected
+
+
+def test_same_model():
+    assert m.same_model("llama3.2", "llama3.2:latest")
+    assert not m.same_model("gemma4:e2b", "gemma4:e4b")
+
+
+@pytest.mark.parametrize(
+    "url, local",
+    [
+        ("http://localhost:11434", True),
+        ("http://127.0.0.1:11434", True),
+        ("http://[::1]:11434", True),
+        ("http://gpu-box:11434", False),
+        ("https://ollama.example.com", False),
+        ("", False),
+    ],
+)
+def test_is_local_url(url, local):
+    assert m.is_local_url(url) is local
+
+
+def test_detect_running_with_model(fake):
+    fake.installed["gemma4:e2b"] = 5
+    env = m.detect_environment(fake.url, "gemma4:e2b")
+    assert env.running and env.version == "0.0.0-fake"
+    assert env.model_installed
+    assert env.local
+    assert env.catalog_entry.name == "gemma4:e2b"
+
+
+def test_detect_running_without_model(fake):
+    fake.installed["llama3.2:latest"] = 5
+    env = m.detect_environment(fake.url, "gemma4:e2b")
+    assert env.running and not env.model_installed
+    assert m.find_installed("llama3.2", env.installed).name == "llama3.2:latest"
+
+
+def test_detect_not_running():
+    env = m.detect_environment("http://127.0.0.1:9", "gemma4:e2b")
+    assert not env.running
+    assert env.installed is None and env.version is None
+
+
+def test_detect_remote_skips_local_probes(monkeypatch):
+    calls = []
+    monkeypatch.setattr(m, "disk_space", lambda p: calls.append(p) or (1, 2))
+    monkeypatch.setattr(m, "_get_json", lambda url, timeout=2: None)
+    env = m.detect_environment("http://gpu-box:11434", "gemma4:e2b")
+    assert not env.local and env.disk_free is None and calls == []
+
+
+def test_models_dir_prefers_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path))
+    assert m.ollama_models_dir() == tmp_path
+
+
+def test_models_dir_home(tmp_path, monkeypatch):
+    monkeypatch.delenv("OLLAMA_MODELS", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".ollama" / "models").mkdir(parents=True)
+    assert m.ollama_models_dir() == tmp_path / ".ollama" / "models"
+
+
+def test_disk_space_and_ram_are_numbers():
+    free, total = m.disk_space(None)
+    assert free and total and free <= total
+    ram = m.total_ram()
+    assert ram is None or ram > 0
+
+
+def test_disk_space_bad_path():
+    assert m.disk_space(Path("/definitely/not/here")) == (None, None)
+
+
+# --------------------------------------------------------------------------
+# Pull checks and pulling
+# --------------------------------------------------------------------------
+
+GB = 1000**3
+
+
+class TestCheckPull:
+    def test_plenty_of_space(self):
+        assert m.check_pull(5 * GB, 2 * GB, 200 * GB, 500 * GB, 32 * GB).ok
+
+    def test_stops_when_less_than_10_percent_would_be_left(self):
+        r = m.check_pull(5 * GB, None, 12 * GB, 100 * GB, None)
+        assert not r.ok and "Not enough disk space" in r.messages[0]
+
+    def test_stops_when_less_than_2_gb_would_be_left(self):
+        r = m.check_pull(5 * GB, None, 6 * GB, 10 * GB, None)
+        assert not r.ok
+
+    def test_ten_percent_floor_is_capped_at_20_gb(self):
+        # 2 TB disk, 100 GB free: 10% would be 200 GB, the cap makes it 20 GB.
+        assert m.check_pull(5 * GB, None, 100 * GB, 2000 * GB, None).ok
+        assert not m.check_pull(5 * GB, None, 24 * GB, 2000 * GB, None).ok
+
+    def test_force_overrides(self):
+        r = m.check_pull(5 * GB, None, 6 * GB, 10 * GB, None, force=True)
+        assert r.ok and "--force" in r.messages[0]
+
+    def test_memory_warning_does_not_stop(self):
+        r = m.check_pull(1 * GB, 7 * GB, 200 * GB, 500 * GB, 8 * GB)
+        assert r.ok and "memory" in r.messages[0]
+
+    def test_unknowns_skip_checks(self):
+        assert m.check_pull(None, None, None, None, None).ok
+
+
+def test_pull_streams_progress(fake):
+    fake.pullable.add("phi4-mini")
+    seen = []
+    m.pull_model(fake.url, "phi4-mini", on_progress=seen.append)
+    assert fake.installed.get("phi4-mini:latest") == 1000
+    assert seen[-1].status == "success"
+    assert max(p.fraction or 0 for p in seen) == 1.0
+    assert any(p.fraction == 0.5 for p in seen)
+
+
+def test_pull_unknown_model(fake):
+    with pytest.raises(m.PullError, match="does not exist"):
+        m.pull_model(fake.url, "no-such-model")
+
+
+def test_pull_error_midway(fake):
+    fake.pullable.add("phi4-mini")
+    fake.fail_pull_midway = True
+    with pytest.raises(m.PullError, match="connection reset"):
+        m.pull_model(fake.url, "phi4-mini")
+
+
+def test_pull_cannot_connect():
+    with pytest.raises(m.PullError, match="Cannot reach"):
+        m.pull_model("http://127.0.0.1:9", "phi4-mini", timeout=1)
+
+
+# --------------------------------------------------------------------------
+# Config edit
+# --------------------------------------------------------------------------
+
+V014_CONFIG = """# hai-sh configuration file
+# See https://github.com/frankbria/hai-sh for documentation
+
+# Default LLM provider to use
+provider: "ollama"
+
+# Provider-specific configurations
+providers:
+  openai:
+    # api_key: "sk-..."  # Uncomment and add your API key
+    model: "gpt-4o-mini"
+    # base_url: null  # Optional: custom API endpoint
+
+  anthropic:
+    # api_key: "sk-ant-..."  # Uncomment and add your API key
+    model: "claude-sonnet-4-5"
+
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama3.2"  # Or: mistral, codellama, etc.
+
+# Context settings
+context:
+  include_history: true
+"""
+
+
+class TestSetConfigModel:
+    def test_edits_only_the_ollama_model_line(self, tmp_path):
+        p = tmp_path / "config.yaml"
+        p.write_text(V014_CONFIG)
+        old, new = m.set_config_model(p, "gemma4:e2b")
+        assert (old, new) == ("llama3.2", "gemma4:e2b")
+        after = p.read_text()
+        assert after == V014_CONFIG.replace('model: "llama3.2"', 'model: "gemma4:e2b"')
+        assert "# Or: mistral, codellama, etc." in after
+        assert yaml.safe_load(after)["providers"]["openai"]["model"] == "gpt-4o-mini"
+
+    def test_writes_backup_and_keeps_mode_600(self, tmp_path):
+        p = tmp_path / "config.yaml"
+        p.write_text(V014_CONFIG)
+        m.set_config_model(p, "phi4-mini")
+        assert (tmp_path / "config.yaml.bak").read_text() == V014_CONFIG
+        for f in (p, tmp_path / "config.yaml.bak"):
+            assert stat.S_IMODE(f.stat().st_mode) == 0o600
+
+    def test_unquoted_value_and_no_comment(self, tmp_path):
+        p = tmp_path / "config.yaml"
+        p.write_text("providers:\n  ollama:\n    model: llama3.2\n    base_url: http://x:1\n")
+        old, _ = m.set_config_model(p, "gemma4:e2b")
+        assert old == "llama3.2"
+        assert (
+            p.read_text()
+            == 'providers:\n  ollama:\n    model: "gemma4:e2b"\n    base_url: http://x:1\n'
+        )
+
+    def test_ignores_nested_and_other_providers_model_keys(self, tmp_path):
+        text = (
+            "providers:\n"
+            "  openai:\n    model: gpt-4o-mini\n"
+            "  ollama:\n    options:\n      model: weird\n    model: llama3.2\n"
+        )
+        p = tmp_path / "config.yaml"
+        p.write_text(text)
+        m.set_config_model(p, "gemma4:e2b")
+        data = yaml.safe_load(p.read_text())
+        assert data["providers"]["openai"]["model"] == "gpt-4o-mini"
+        assert data["providers"]["ollama"]["options"]["model"] == "weird"
+        assert data["providers"]["ollama"]["model"] == "gemma4:e2b"
+
+    def test_falls_back_to_rewrite_when_no_model_line(self, tmp_path):
+        p = tmp_path / "config.yaml"
+        p.write_text(
+            "provider: ollama\nproviders:\n  ollama:\n    base_url: http://localhost:11434\n"
+        )
+        old, _ = m.set_config_model(p, "gemma4:e2b")
+        assert old is None
+        data = yaml.safe_load(p.read_text())
+        assert data["providers"]["ollama"] == {
+            "base_url": "http://localhost:11434",
+            "model": "gemma4:e2b",
+        }
+
+    def test_creates_missing_file(self, tmp_path):
+        p = tmp_path / "sub" / "config.yaml"
+        m.set_config_model(p, "gemma4:e2b")
+        assert yaml.safe_load(p.read_text())["providers"]["ollama"]["model"] == "gemma4:e2b"
+        assert not (tmp_path / "sub" / "config.yaml.bak").exists()
+
+    def test_flow_style_providers_falls_back(self, tmp_path):
+        p = tmp_path / "config.yaml"
+        p.write_text("providers: {ollama: {model: llama3.2}}\n")
+        m.set_config_model(p, "gemma4:e2b")
+        assert yaml.safe_load(p.read_text())["providers"]["ollama"]["model"] == "gemma4:e2b"
+
+
+# --------------------------------------------------------------------------
+# Notices, cloud, hints, formatting
+# --------------------------------------------------------------------------
+
+
+def test_notice_marker(tmp_path):
+    assert not m.notice_seen("k", tmp_path)
+    m.mark_notice_seen("k", tmp_path)
+    assert m.notice_seen("k", tmp_path)
+    assert not m.notice_seen("other", tmp_path)
+
+
+def test_old_default_notice_only_for_llama32():
+    text = m.old_default_notice("llama3.2:latest")
+    assert "gemma4:e2b" in text and "hai-model use gemma4:e2b" in text
+    assert m.old_default_notice("gemma4:e2b") is None
+    assert m.old_default_notice("mistral") is None
+
+
+def test_configured_cloud_providers(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert m.configured_cloud_providers({"providers": {"openai": {"model": "x"}}}) == []
+    got = m.configured_cloud_providers({"providers": {"openai": {"api_key": "sk-1", "model": "x"}}})
+    assert got == [("openai", {"api_key": "sk-1", "model": "x"})]
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-2")
+    names = [n for n, _ in m.configured_cloud_providers({})]
+    assert names == ["anthropic"]
+
+
+def test_install_and_start_hints_are_printed_not_run():
+    linux = "\n".join(m.ollama_install_hint("Linux"))
+    assert "curl -fsSL https://ollama.com/install.sh | sh" in linux and "sudo" in linux
+    mac = "\n".join(m.ollama_install_hint("Darwin"))
+    assert "https://ollama.com/download" in mac
+    assert "sudo systemctl start ollama" in "\n".join(m.ollama_start_hint("Linux"))
+    assert "ollama serve" in "\n".join(m.ollama_start_hint("Darwin"))
+
+
+@pytest.mark.parametrize(
+    "n, text",
+    [
+        (None, "unknown"),
+        (512, "512 B"),
+        (4587156505, "4.6 GB"),
+        (1929912626, "1.9 GB"),
+        (2 * 10**12, "2.0 TB"),
+    ],
+)
+def test_format_bytes(n, text):
+    assert m.format_bytes(n) == text
+
+
+def test_ollama_config_defaults():
+    assert m.ollama_config({}) == {
+        "base_url": "http://localhost:11434",
+        "model": DEFAULT_OLLAMA_MODEL,
+    }
