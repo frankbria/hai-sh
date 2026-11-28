@@ -231,7 +231,10 @@ class OllamaProvider(BaseLLMProvider):
             body = response.text or ""
         except Exception:
             return False
-        return "not found" in body.lower()
+        body = body.lower()
+        # Ollama says e.g. {"error":"model 'x' not found"}. A proxy's bare
+        # "404 page not found" is a routing problem, not a missing model.
+        return "not found" in body and "model" in body
 
     @staticmethod
     def _rejects_think(response: Any, payload: dict[str, Any]) -> bool:

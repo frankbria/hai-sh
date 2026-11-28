@@ -59,6 +59,12 @@ from hai_sh.providers.ollama import OllamaProvider  # noqa: E402
 CONDITIONS = ("baseline", "constrained")
 
 
+def _last_byte(path: Path) -> bytes:
+    with path.open("rb") as fh:
+        fh.seek(-1, os.SEEK_END)
+        return fh.read(1)
+
+
 def load_models(spec: str) -> list[str]:
     p = Path(spec)
     if p.exists():
@@ -206,6 +212,8 @@ def main() -> int:
     if args.only:
         keep = set(args.only.split(","))
         cases = [c for c in cases if c["id"] in keep]
+        if not cases:
+            raise SystemExit(f"--only {args.only!r} matches no case id")
     conditions = [c for c in args.conditions.split(",") if c]
     models = load_models(args.models)
 
@@ -312,8 +320,9 @@ def main() -> int:
                         parsed = parse_response(row["raw"])
                         row["parsed"] = parsed
                         row["json_ok"] = True
-                    except (ValueError, TypeError) as e:
-                        # TypeError: valid JSON that isn't an object (e.g. null)
+                    except (ValueError, TypeError, OverflowError) as e:
+                        # TypeError: valid JSON that isn't an object (e.g. null);
+                        # OverflowError: a confidence like 1e309
                         row["json_ok"] = False
                         row["parse_error"] = str(e)[:300]
                         fb = extract_fallback_response(row["raw"])
@@ -323,7 +332,11 @@ def main() -> int:
                     if cmd:
                         ok, why = validate_command(cmd)
                         row["hai_validator"] = {"ok": ok, "reason": why}
-                with raw_path.open("a") as fh:
+                with raw_path.open("a+") as fh:
+                    # A run killed mid-write leaves a partial last line; start
+                    # a new one so this row isn't glued onto it.
+                    if fh.tell() and _last_byte(raw_path) != b"\n":
+                        fh.write("\n")
                     fh.write(json.dumps(row) + "\n")
                 print(
                     f"[{model} {cond} {c['id']}] {row.get('latency_s')}s "

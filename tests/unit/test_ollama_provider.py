@@ -11,7 +11,6 @@ import requests
 
 from hai_sh.providers.ollama import OllamaModelNotFoundError, OllamaProvider, REQUESTS_AVAILABLE
 
-
 # Skip all tests if requests is not installed
 pytestmark = pytest.mark.skipif(not REQUESTS_AVAILABLE, reason="requests package not installed")
 
@@ -826,7 +825,7 @@ def test_generate_missing_model_names_the_pull_command(mock_post, stream):
 @patch("hai_sh.providers.ollama.requests.post")
 def test_generate_other_404_stays_a_plain_http_error(mock_post):
     """A 404 that is not about the model (e.g. wrong base_url path) is not misreported."""
-    mock_post.return_value = _http_response(404, "404 page")
+    mock_post.return_value = _http_response(404, "404 page not found")
     provider = OllamaProvider({"model": "gemma4:e2b", "stream": False})
 
     with pytest.raises(RuntimeError) as exc:
