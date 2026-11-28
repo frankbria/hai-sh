@@ -76,6 +76,10 @@ Not yet published to PyPI.
   read JSON's `\"` as a Python escape. It now passes the JSON on stdin.
 - `hai setup` writes its config with mode 600 from the start (it may hold API
   keys) instead of tightening the mode after writing.
+- `hai-model use` leaves the config alone, with a clear message, when the file
+  isn't valid YAML, isn't laid out the way hai expects, is a link to its own
+  `.bak`, or was saved by something else while hai was updating it.
+- In app mode, `--model` now applies to the provider app mode actually uses.
 
 ## v0.1.4 (2026-02-16)
 

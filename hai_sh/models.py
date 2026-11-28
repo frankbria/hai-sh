@@ -585,6 +585,12 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
     Returns (old model or None, new model).
     """
     config_path = Path(config_path)
+    backup_path = config_path.with_name(config_path.name + ".bak")
+    if config_path.exists() and backup_path.exists() and os.path.samefile(config_path, backup_path):
+        raise ConfigWriteError(
+            f"{config_path} and {backup_path} are the same file, so hai can't keep a "
+            "backup. Nothing was changed."
+        )
     original = config_path.read_text() if config_path.exists() else ""
     old: Optional[str] = None
 
@@ -594,9 +600,22 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
     if new_text is not None:
         new_text, old = new_text
     else:
-        data = yaml.safe_load(original) if original.strip() else {}
-        if not isinstance(data, dict):
-            data = {}
+        try:
+            data = yaml.safe_load(original) if original.strip() else {}
+        except yaml.YAMLError as e:
+            raise ConfigWriteError(
+                f"{config_path} isn't valid YAML ({e.__class__.__name__}), so hai won't "
+                "edit it. Fix the file, or set providers.ollama.model by hand. "
+                "Nothing was changed."
+            ) from e
+        data = {} if data is None else data
+        if not isinstance(data, dict) or not isinstance(
+            data.get("providers") or {}, dict
+        ) or not isinstance((data.get("providers") or {}).get("ollama") or {}, dict):
+            raise ConfigWriteError(
+                f"{config_path} doesn't have the layout hai expects (providers: ollama: "
+                "model:), so hai won't rewrite it. Nothing was changed."
+            )
         # Copy both mappings: a YAML alias (``ollama: *shared``) would
         # otherwise carry the new model into every provider sharing it.
         providers = dict(data.get("providers") or {})
@@ -610,12 +629,12 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
     if config_path.exists():
         # Replace the backup itself, even if it is a symlink: never write
         # through it into whatever file it points to.
-        replace_private(
-            config_path.with_name(config_path.name + ".bak"), original, follow_symlink=False
-        )
+        replace_private(backup_path, original, follow_symlink=False)
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-    replace_private(config_path, new_text)
+    # If the file changed since hai read it (an editor saved it meanwhile),
+    # stop rather than replace that edit with an older copy.
+    replace_private(config_path, new_text, expected=original)
     return old, name
 
 
@@ -623,7 +642,9 @@ class ConfigWriteError(OSError):
     """The config could not be replaced safely; nothing was changed."""
 
 
-def replace_private(path: Path, text: str, follow_symlink: bool = True) -> None:
+def replace_private(
+    path: Path, text: str, follow_symlink: bool = True, expected: Optional[str] = None
+) -> None:
     """
     Replace ``path`` with ``text`` atomically: write a mode-600 file next to it,
     flush it to disk, then rename it over the old one. If the disk fills up or
@@ -633,9 +654,12 @@ def replace_private(path: Path, text: str, follow_symlink: bool = True) -> None:
     its link and the file it points to is replaced. Without it (the backup),
     the link itself is replaced and its target is never touched.
 
+    With ``expected``, the file must still hold exactly that text just before
+    the rename; otherwise someone else changed it and it is left alone.
+
     Raises ConfigWriteError, leaving ``path`` unchanged, when the directory
-    doesn't allow the temporary file: hai never falls back to rewriting the
-    live file in place.
+    doesn't allow the temporary file (hai never falls back to rewriting the
+    live file in place) or when ``expected`` no longer matches.
     """
     target = Path(os.path.realpath(str(path))) if follow_symlink else Path(path)
     tmp = target.with_name(f".{target.name}.hai-tmp-{os.getpid()}")
@@ -655,6 +679,13 @@ def replace_private(path: Path, text: str, follow_symlink: bool = True) -> None:
             f.write(text)
             f.flush()
             os.fsync(f.fileno())
+        if expected is not None:
+            current = target.read_text() if target.exists() else ""
+            if current != expected:
+                raise ConfigWriteError(
+                    f"{target} changed while hai was updating it. Nothing was changed; "
+                    "run the command again."
+                )
         os.replace(str(tmp), str(target))
     except BaseException:
         if fd >= 0:

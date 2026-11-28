@@ -658,3 +658,47 @@ class TestThirdReviewFixes:
         path, free, total = m.tightest_disk([small, big])
         assert path == big
         assert not m.check_pull(int(4.6 * gb), None, free, total, None).ok
+
+
+class TestFourthReviewFixes:
+    def test_config_linked_to_its_own_backup_is_refused(self, tmp_path):
+        backup = tmp_path / "config.yaml.bak"
+        original = 'providers:\n  ollama:\n    model: "a"\n'
+        backup.write_text(original)
+        path = tmp_path / "config.yaml"
+        path.symlink_to(backup)
+        with pytest.raises(m.ConfigWriteError, match="same file"):
+            m.set_config_model(path, "b")
+        assert backup.read_text() == original
+
+    def test_edit_made_meanwhile_is_not_overwritten(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.yaml"
+        path.write_text('providers:\n  ollama:\n    model: "a"\n')
+        real_fsync = m.os.fsync
+
+        def someone_saves(fd):
+            real_fsync(fd)
+            if not path.read_text().startswith("# edited"):
+                path.write_text('# edited\nproviders:\n  ollama:\n    model: "x"\n')
+
+        monkeypatch.setattr(m.os, "fsync", someone_saves)
+        with pytest.raises(m.ConfigWriteError, match="changed while"):
+            m.set_config_model(path, "b")
+        assert path.read_text().startswith("# edited")
+        assert not [p for p in tmp_path.iterdir() if ".hai-tmp-" in p.name]
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "providers:\n  ollama:\n    model: [unclosed\n",
+            "providers: [ollama]\n",
+            "- just\n- a list\n",
+        ],
+    )
+    def test_config_hai_cannot_read_is_left_alone(self, tmp_path, text):
+        path = tmp_path / "config.yaml"
+        path.write_text(text)
+        with pytest.raises(m.ConfigWriteError, match="Nothing was changed"):
+            m.set_config_model(path, "b")
+        assert path.read_text() == text
+        assert not (tmp_path / "config.yaml.bak").exists()

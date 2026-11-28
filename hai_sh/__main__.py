@@ -535,14 +535,18 @@ def run_setup_wizard() -> int:
 
 
 def apply_cli_overrides(
-    config: Dict[str, Any], provider: Optional[str], model: Optional[str]
+    config: Dict[str, Any],
+    provider: Optional[str],
+    model: Optional[str],
+    app_mode: bool = False,
 ) -> None:
     """
     Apply ``--provider`` and ``--model`` to ``config`` for this one run.
 
     ``provider_priority`` wins over ``provider``, so ``--provider`` also moves
     that provider to the front of the list (the rest stay as fallbacks).
-    ``--model`` applies to whichever provider hai tries first.
+    ``--model`` applies to whichever provider hai tries first: the head of
+    ``provider_priority``, or in app mode (which ignores that list) ``provider``.
     """
     if provider:
         config['provider'] = provider
@@ -550,7 +554,10 @@ def apply_cli_overrides(
         if priority:
             config['provider_priority'] = [provider] + [p for p in priority if p != provider]
     if model:
-        first = (config.get('provider_priority') or [config.get('provider', 'ollama')])[0]
+        if app_mode:
+            first = config.get('provider') or 'ollama'
+        else:
+            first = (config.get('provider_priority') or [config.get('provider', 'ollama')])[0]
         providers_cfg = dict(config.get('providers') or {})
         providers_cfg[first] = dict(providers_cfg.get(first) or {})
         providers_cfg[first]['model'] = model
@@ -869,7 +876,7 @@ def main():
             config_path = Path(args.config) if args.config else None
             try:
                 config_dict = load_config(config_path=config_path, use_pydantic=False)
-                apply_cli_overrides(config_dict, args.provider, args.model)
+                apply_cli_overrides(config_dict, args.provider, args.model, app_mode=True)
                 validated_config, _warnings = validate_config_dict(config_dict)
                 return run_app_mode(validated_config, user_query)
             except ConfigLoadError as e:

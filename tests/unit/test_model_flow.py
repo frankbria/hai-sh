@@ -662,3 +662,16 @@ def test_app_mode_gets_the_model_flag(home, fake, monkeypatch):
     monkeypatch.setattr("hai_sh.__main__.run_app_mode", lambda cfg, query: 0)
     assert run_hai("--app-mode", "--model", "phi4-mini", "list", "files") == 0
     assert seen["config"]["providers"]["ollama"]["model"] == "phi4-mini"
+
+
+def test_app_mode_model_flag_follows_the_provider_not_the_priority_list():
+    from hai_sh.__main__ import apply_cli_overrides
+
+    config = {
+        "provider": "ollama",
+        "provider_priority": ["openai", "ollama"],
+        "providers": {"ollama": {"model": "a"}, "openai": {"model": "gpt-4o"}},
+    }
+    apply_cli_overrides(config, None, "phi4-mini", app_mode=True)
+    assert config["providers"]["ollama"]["model"] == "phi4-mini"
+    assert config["providers"]["openai"]["model"] == "gpt-4o"
