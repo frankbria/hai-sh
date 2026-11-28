@@ -193,7 +193,8 @@ def effective_licence_policy(config: Optional[Dict[str, Any]] = None) -> str:
     """
     if DEFAULT_LICENCE_POLICY == "commercial":
         return "commercial"
-    user = ((config or {}).get("models") or {}).get("licence_policy")
+    models = (config or {}).get("models")
+    user = models.get("licence_policy") if isinstance(models, dict) else None
     return "commercial" if user == "commercial" else "any"
 
 
@@ -228,7 +229,10 @@ def same_model(a: str, b: str) -> bool:
 
 def is_local_url(base_url: str) -> bool:
     """True when ``base_url`` points at this machine."""
-    host = (urlparse(base_url or "").hostname or "").lower()
+    try:
+        host = (urlparse(base_url or "").hostname or "").lower()
+    except ValueError:  # e.g. an unfinished IPv6 address like http://[::1
+        return False
     return host in ("localhost", "127.0.0.1", "::1", "0.0.0.0") or host.startswith("127.")
 
 
@@ -605,13 +609,19 @@ def _error_text(response: Any) -> str:
 # --------------------------------------------------------------------------
 
 
-def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
+def set_config_model(
+    config_path: Path, name: str, expected_text: Optional[str] = None
+) -> Tuple[Optional[str], str]:
     """
     Set ``providers.ollama.model`` in ``config_path``, preserving the file.
 
     Edits the single ``model:`` line under ``providers:`` > ``ollama:`` in
     place, so comments survive. Falls back to a YAML rewrite only when that
     line can't be found. Writes ``<file>.bak`` first and keeps mode 600.
+
+    ``expected_text``, when given, is the file's text when the caller read
+    its settings (``""`` for a missing file). If the file no longer matches,
+    nothing is written: the caller acted on settings that have since changed.
 
     Returns (old model or None, new model).
     """
@@ -623,6 +633,11 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
             "backup. Nothing was changed."
         )
     original = config_path.read_text() if config_path.exists() else ""
+    if expected_text is not None and original != expected_text:
+        raise ConfigWriteError(
+            f"{config_path} changed while hai was working (for example during the "
+            "download), so hai won't edit it. Run the command again. Nothing was changed."
+        )
     old: Optional[str] = None
 
     new_text = _edit_model_line(original, name)
@@ -640,9 +655,11 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
                 "Nothing was changed."
             ) from e
         data = {} if data is None else data
-        if not isinstance(data, dict) or not isinstance(
-            data.get("providers") or {}, dict
-        ) or not isinstance((data.get("providers") or {}).get("ollama") or {}, dict):
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("providers") or {}, dict)
+            or not isinstance((data.get("providers") or {}).get("ollama") or {}, dict)
+        ):
             raise ConfigWriteError(
                 f"{config_path} doesn't have the layout hai expects (providers: ollama: "
                 "model:), so hai won't rewrite it. Nothing was changed."
@@ -695,9 +712,7 @@ def replace_private(
     target = Path(os.path.realpath(str(path))) if follow_symlink else Path(path)
     tmp = target.with_name(f".{target.name}.hai-tmp-{os.getpid()}")
     try:
-        fd = os.open(
-            str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, stat.S_IRUSR | stat.S_IWUSR
-        )
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, stat.S_IRUSR | stat.S_IWUSR)
     except OSError as e:
         raise ConfigWriteError(
             f"Can't write {target}: hai needs to create a file in {target.parent} "

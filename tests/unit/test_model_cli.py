@@ -351,3 +351,33 @@ class TestSeventhReviewFixes:
 
         monkeypatch.setattr(requests, "post", lambda *a, **k: Pull())
         model_cli.m.pull_model("http://x", "a")  # no exception
+
+
+class TestNinthReviewFixes:
+    def test_config_edited_during_download_is_left_alone(self, cfg, fake, monkeypatch, capsys):
+        fake.pullable.add("phi4-mini")
+        answers(monkeypatch, "y")
+        edited = cfg.read_text().replace(fake.url, "http://other-host:11434")
+        real_pull = model_cli.consented_pull
+
+        def pull_then_edit(*a, **k):
+            ok = real_pull(*a, **k)
+            cfg.write_text(edited)  # someone points hai at another Ollama meanwhile
+            return ok
+
+        monkeypatch.setattr(model_cli, "consented_pull", pull_then_edit)
+        assert run(cfg, "use", "phi4-mini") == 1
+        assert cfg.read_text() == edited
+        assert "changed while hai was working" in capsys.readouterr().err
+
+    def test_unfinished_ipv6_url_does_not_crash_status(self, tmp_path, capsys):
+        cfg = tmp_path / "c.yaml"
+        cfg.write_text('providers:\n  ollama:\n    base_url: "http://[::1"\n')
+        assert run(cfg, "status") in (0, 1)
+        assert "not reachable" in capsys.readouterr().out
+
+    def test_models_setting_that_is_not_a_section(self, tmp_path, fake, capsys):
+        cfg = tmp_path / "c.yaml"
+        cfg.write_text(f'models: commercial\nproviders:\n  ollama:\n    base_url: "{fake.url}"\n')
+        assert run(cfg, "list") == 0
+        assert run(cfg, "status") in (0, 1)

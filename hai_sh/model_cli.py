@@ -239,8 +239,10 @@ def _load(args: argparse.Namespace) -> tuple:
             raw = load_config_file(config_path)
             providers = raw.get("providers")
             ollama = providers.get("ollama") if isinstance(providers, dict) else None
-            if providers is not None and not isinstance(providers, dict) or (
-                ollama is not None and not isinstance(ollama, dict)
+            if (
+                providers is not None
+                and not isinstance(providers, dict)
+                or (ollama is not None and not isinstance(ollama, dict))
             ):
                 raise ConfigError(
                     f"{config_path}: providers.ollama should be a section with "
@@ -385,12 +387,30 @@ def cmd_pull(args: argparse.Namespace) -> int:
     if env.model_installed:
         print(f"{args.name} is already installed.")
         return 0
-    return 0 if consented_pull(
-        env, args.name, assume_yes=args.yes, force=args.force, config_path=config_path
-    ) else 1
+    return (
+        0
+        if consented_pull(
+            env, args.name, assume_yes=args.yes, force=args.force, config_path=config_path
+        )
+        else 1
+    )
+
+
+def _config_text(args: argparse.Namespace) -> Optional[str]:
+    """The config file's text now ("" if missing), or None if it can't be read."""
+    from hai_sh.init import get_config_path
+
+    path = Path(args.config).expanduser() if args.config else get_config_path()
+    try:
+        return path.read_text() if path.exists() else ""
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def cmd_use(args: argparse.Namespace) -> int:
+    # Read the text first: if the file changes later (say, base_url during a
+    # long download), the edit below stops instead of mixing old and new.
+    before = _config_text(args)
     config, config_path = _load(args)
     oc = m.ollama_config(config)
     name = args.name.strip()
@@ -413,7 +433,9 @@ def cmd_use(args: argparse.Namespace) -> int:
             if not consented_pull(
                 env, name, assume_yes=args.yes, force=args.force, config_path=config_path
             ):
-                print(f"Config not changed. To set it anyway: {hai_model_command(f'use {shlex.quote(name)} --no-pull', config_path)}")
+                print(
+                    f"Config not changed. To set it anyway: {hai_model_command(f'use {shlex.quote(name)} --no-pull', config_path)}"
+                )
                 return 1
 
     if catalog and not catalog.get(name):
@@ -427,7 +449,7 @@ def cmd_use(args: argparse.Namespace) -> int:
             )
 
     try:
-        old, new = m.set_config_model(config_path, name)
+        old, new = m.set_config_model(config_path, name, expected_text=before)
     except OSError as e:
         print(f"Config not changed: {e}", file=sys.stderr)
         return 1
