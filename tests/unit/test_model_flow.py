@@ -773,3 +773,30 @@ class TestTwelfthReviewFixes:
     )
     def test_display_url(self, url, shown):
         assert model_cli.m.display_url(url) == shown
+
+
+class TestFourteenthReviewFixes:
+    def test_setup_probes_the_expanded_ollama_url(self, monkeypatch):
+        from hai_sh.__main__ import setup_probe_url
+
+        monkeypatch.setenv("HAI_TEST_OLLAMA_URL", "http://box:11434")
+        assert setup_probe_url("${HAI_TEST_OLLAMA_URL}") == "http://box:11434"
+        assert setup_probe_url("") == "http://localhost:11434"
+        assert setup_probe_url(None) == "http://localhost:11434"
+        monkeypatch.delenv("HAI_TEST_OLLAMA_URL")
+        assert setup_probe_url("${HAI_TEST_OLLAMA_URL}") == "http://localhost:11434"
+
+    def test_hai_model_reads_the_config_once(self, home, fake, monkeypatch):
+        cfg = write_config(home, fake.url)
+        reads = []
+        import hai_sh.config as config_mod
+
+        real = config_mod.load_config_file
+
+        def counting(path=None):
+            reads.append(path)
+            return real(path)
+
+        monkeypatch.setattr(config_mod, "load_config_file", counting)
+        model_cli.main(["--config", str(cfg), "list"])
+        assert len(reads) == 1

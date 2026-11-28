@@ -88,6 +88,8 @@ Not yet published to PyPI.
   is set but empty (for example `${OLLAMA_URL}` with the variable unset),
   instead of using the local Ollama.
 - A download finishes as soon as Ollama reports success.
+- The setup wizard checks the Ollama address the way hai will use it, with
+  `${VAR}` expanded.
 - An unfinished Ollama address (such as `http://[::1`), a `models:` setting
   that isn't a section, or an empty `providers:` line no longer crashes
   `hai-model`.

@@ -823,3 +823,12 @@ class TestEleventhReviewFixes:
             m.set_config_model(cfg, "b")
         assert real_read(bak) == "the old backup\n"
         assert "model: a" in real_read(cfg)
+
+
+def test_service_dot_ollama_without_models_counts_for_the_disk_check(tmp_path, monkeypatch):
+    service = tmp_path / "usr" / "share" / "ollama" / ".ollama"
+    service.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("OLLAMA_MODELS", raising=False)
+    monkeypatch.setattr(m, "SERVICE_MODELS_DIR", service / "models")
+    assert m.ollama_model_dirs() == [service / "models"]

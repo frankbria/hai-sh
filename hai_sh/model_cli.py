@@ -229,40 +229,47 @@ def ollama_problem_lines(env: m.ModelEnvironment) -> List[str]:
 
 
 def _load(args: argparse.Namespace) -> tuple:
-    from hai_sh.config import ConfigError, load_config, load_config_file
+    from hai_sh.config import (
+        DEFAULT_CONFIG,
+        ConfigError,
+        expand_env_vars_recursive,
+        load_config,
+        load_config_file,
+        merge_configs,
+    )
     from hai_sh.init import get_config_path
 
     config_path = Path(args.config).expanduser() if args.config else get_config_path()
     try:
-        # A missing file gives the defaults (never another config file). A file
-        # that exists but can't be read or parsed stops here: going on with the
-        # defaults could act on a different Ollama from the one the file names.
-        raw = None
-        if config_path.exists():
-            raw = load_config_file(config_path)
-            providers = raw.get("providers")
-            ollama = providers.get("ollama") if isinstance(providers, dict) else None
-            # "providers:" with nothing under it is None, which hai's
-            # validation can't take either.
-            if ("providers" in raw and not isinstance(providers, dict)) or (
-                ollama is not None and not isinstance(ollama, dict)
-            ):
-                raise ConfigError(
-                    f"{config_path}: providers.ollama should be a section with "
-                    "base_url and model"
-                )
-        config = load_config(config_path=config_path, use_pydantic=False)
-        if raw is not None:
-            ollama = (raw.get("providers") or {}).get("ollama") or {}
-            url = ((config.get("providers") or {}).get("ollama") or {}).get("base_url")
-            if "base_url" in ollama and not (isinstance(url, str) and url.strip()):
-                # e.g. base_url: ${OLLAMA_URL} with the variable unset. hai
-                # refuses such a config, so hai-model mustn't fall back to
-                # the local Ollama either.
-                raise ConfigError(
-                    f"{config_path}: providers.ollama.base_url is empty "
-                    "(is an environment variable it uses unset?)"
-                )
+        if not config_path.exists():
+            # A missing file gives the defaults (never another config file).
+            return load_config(config_path=config_path, use_pydantic=False), config_path
+        # One strict read: a file that exists but can't be read or parsed stops
+        # here, because going on with the defaults could act on a different
+        # Ollama from the one the file names.
+        user = load_config_file(config_path)
+        providers = user.get("providers")
+        ollama = providers.get("ollama") if isinstance(providers, dict) else None
+        # "providers:" with nothing under it is None, which hai's validation
+        # can't take either.
+        if ("providers" in user and not isinstance(providers, dict)) or (
+            ollama is not None and not isinstance(ollama, dict)
+        ):
+            raise ConfigError(
+                f"{config_path}: providers.ollama should be a section with " "base_url and model"
+            )
+        user = expand_env_vars_recursive(user)
+        user.pop("model", None)  # deprecated top-level field, as load_config does
+        ollama = (user.get("providers") or {}).get("ollama") or {}
+        url = ollama.get("base_url")
+        if "base_url" in ollama and not (isinstance(url, str) and url.strip()):
+            # e.g. base_url: ${OLLAMA_URL} with the variable unset. hai refuses
+            # such a config, so hai-model mustn't fall back to the local Ollama.
+            raise ConfigError(
+                f"{config_path}: providers.ollama.base_url is empty "
+                "(is an environment variable it uses unset?)"
+            )
+        config = merge_configs(DEFAULT_CONFIG, user)
     except ConfigError as e:
         print(f"Cannot read config: {e}", file=sys.stderr)
         raise SystemExit(1) from None

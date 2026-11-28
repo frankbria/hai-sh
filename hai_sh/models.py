@@ -311,6 +311,10 @@ def find_installed(
     return None
 
 
+# Where the Linux install script's ollama service user keeps its models.
+SERVICE_MODELS_DIR = Path("/usr/share/ollama/.ollama/models")
+
+
 def ollama_model_dirs() -> List[Path]:
     """
     Every place this machine's Ollama may keep models that exists:
@@ -322,13 +326,15 @@ def ollama_model_dirs() -> List[Path]:
     if os.environ.get("OLLAMA_MODELS"):
         candidates.append(Path(os.environ["OLLAMA_MODELS"]).expanduser())
     candidates.append(Path.home() / ".ollama" / "models")
-    candidates.append(Path("/usr/share/ollama/.ollama/models"))
+    candidates.append(SERVICE_MODELS_DIR)
     seen, out = set(), []
     for i, path in enumerate(candidates):
         # $OLLAMA_MODELS counts even before Ollama creates it: that's where it
         # will download to (its disk is measured at the nearest existing parent).
         explicit = i == 0 and bool(os.environ.get("OLLAMA_MODELS"))
-        if (explicit or path.is_dir()) and path not in seen:
+        # A .ollama folder without models/ yet (first pull) still says which
+        # disk the download will land on.
+        if (explicit or path.is_dir() or path.parent.is_dir()) and path not in seen:
             seen.add(path)
             out.append(path)
     return out

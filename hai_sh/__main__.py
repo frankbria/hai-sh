@@ -507,7 +507,7 @@ def run_setup_wizard() -> int:
         )
         if base_url:
             config_updates["ollama_base_url"] = base_url
-        model = choose_setup_ollama_model(base_url or "http://localhost:11434")
+        model = choose_setup_ollama_model(setup_probe_url(base_url))
         if model is None:
             print("Setup cancelled.")
             return 0
@@ -563,6 +563,16 @@ def apply_cli_overrides(
         providers_cfg[first] = dict(providers_cfg.get(first) or {})
         providers_cfg[first]['model'] = model
         config['providers'] = providers_cfg
+
+
+def setup_probe_url(base_url: Optional[str]) -> str:
+    """
+    The Ollama URL the setup wizard should probe for ``base_url`` as typed:
+    the same one hai will use, since loading the config expands ${VAR}.
+    """
+    from hai_sh.config import expand_env_vars
+
+    return expand_env_vars(base_url or "").strip() or "http://localhost:11434"
 
 
 def choose_setup_ollama_model(base_url: str) -> Optional[str]:
