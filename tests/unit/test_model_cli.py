@@ -289,3 +289,18 @@ def test_broken_existing_config_stops_instead_of_using_defaults(tmp_path, fake, 
     assert exc.value.code == 1
     assert "Cannot read config" in capsys.readouterr().err
     assert cfg.read_text() == text
+
+
+class TestSixthReviewFixes:
+    def test_ollama_down_hint_keeps_the_config_path(self, tmp_path, capsys):
+        cfg = tmp_path / "team.yaml"
+        cfg.write_text("providers:\n  ollama:\n    base_url: http://127.0.0.1:9\n    model: x\n")
+        assert run(cfg, "use", "phi4-mini") == 1
+        assert f"hai-model --config {cfg} use phi4-mini --no-pull" in capsys.readouterr().err
+
+    def test_model_name_is_shell_quoted_in_hints(self):
+        from hai_sh import model_flow
+
+        hint = model_flow.missing_model_hint("x; rm -rf ~")
+        assert "pull 'x; rm -rf ~'" in hint
+        assert "pull gemma4:e2b" in model_flow.missing_model_hint("gemma4:e2b")

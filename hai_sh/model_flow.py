@@ -49,7 +49,11 @@ def suggest_only_json(conversation: str, config_path: Optional[Path] = None) -> 
     """
     if config_path is not None:
         raw = str(config_path)
-        if any(c in raw for c in "'\"\\") or any(c < " " or c == "\x7f" for c in raw):
+        # The message is collapsed to single spaces, so a run of spaces or
+        # any other whitespace in the path wouldn't survive either.
+        if "  " in raw or any(c in raw for c in "'\"\\") or any(
+            c < " " or c == "\x7f" or (c.isspace() and c != " ") for c in raw
+        ):
             quoted = shlex.quote(raw)
             if quoted in conversation:
                 conversation = conversation.replace(quoted, "YOUR_CONFIG_FILE") + (
@@ -97,7 +101,7 @@ def missing_model_hint(model: str, config_path: Optional[Path] = None) -> str:
     """The command to run, with the download size when hai knows it."""
     return (
         f"To install it{_download_size(model)}, run: "
-        f"{hai_model_command('pull ' + model, config_path)}"
+        f"{hai_model_command('pull ' + shlex.quote(model), config_path)}"
     )
 
 
@@ -179,7 +183,7 @@ def missing_model_flow(
 
 
 def _stop(model: str, config_path: Optional[Path] = None) -> None:
-    print(f"Nothing changed. To install it later: {hai_model_command('pull ' + model, config_path)}")
+    print(f"Nothing changed. To install it later: {hai_model_command('pull ' + shlex.quote(model), config_path)}")
     print(f"To see other models: {hai_model_command('list', config_path)}")
 
 
@@ -237,7 +241,7 @@ def _offer_default(name: str, config_path: Optional[Path]) -> None:
             return
         print(f"providers.ollama.model: {old or '(not set)'} -> {new}")
     else:
-        print(f"Using {name} for this question only. To keep it: hai-model use {name}")
+        print(f"Using {name} for this question only. To keep it: {hai_model_command('use ' + shlex.quote(name), config_path)}")
 
 
 # --------------------------------------------------------------------------

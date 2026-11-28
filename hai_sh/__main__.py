@@ -5,6 +5,7 @@ CLI entry point for hai.
 import argparse
 import logging
 import os
+import shlex
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -623,7 +624,7 @@ def choose_setup_ollama_model(base_url: str) -> Optional[str]:
         model = options[choice]
 
     if not env.running:
-        print(f"hai will use {model}. Once Ollama runs, install it with: hai-model pull {model}")
+        print(f"hai will use {model}. Once Ollama runs, install it with: hai-model pull {shlex.quote(model)}")
         return model
 
     model_env = m.detect_environment(base_url, model)
@@ -1016,7 +1017,7 @@ def main():
         except OllamaModelNotFoundError as e:
             handle_provider_error(
                 f"Model '{e.model}' isn't installed in Ollama.",
-                f"Run: {model_flow.hai_model_command('pull ' + e.model, config_path)}",
+                f"Run: {model_flow.hai_model_command('pull ' + shlex.quote(e.model), config_path)}",
             )
             return 1
         except Exception as e:

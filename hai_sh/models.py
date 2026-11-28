@@ -272,10 +272,14 @@ def list_installed(base_url: str) -> Optional[List[InstalledModel]]:
         if not isinstance(m, dict) or not m.get("name"):
             continue
         details = m.get("details") or {}
+        try:
+            size = int(m.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
         out.append(
             InstalledModel(
                 name=str(m["name"]),
-                size=int(m.get("size") or 0),
+                size=size,
                 parameter_size=str(details.get("parameter_size") or ""),
                 quantization=str(details.get("quantization_level") or ""),
             )
@@ -306,8 +310,11 @@ def ollama_model_dirs() -> List[Path]:
     candidates.append(Path.home() / ".ollama" / "models")
     candidates.append(Path("/usr/share/ollama/.ollama/models"))
     seen, out = set(), []
-    for path in candidates:
-        if path.is_dir() and path not in seen:
+    for i, path in enumerate(candidates):
+        # $OLLAMA_MODELS counts even before Ollama creates it: that's where it
+        # will download to (its disk is measured at the nearest existing parent).
+        explicit = i == 0 and bool(os.environ.get("OLLAMA_MODELS"))
+        if (explicit or path.is_dir()) and path not in seen:
             seen.add(path)
             out.append(path)
     return out

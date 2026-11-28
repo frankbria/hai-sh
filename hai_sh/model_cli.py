@@ -138,7 +138,7 @@ def run_pull(
     except KeyboardInterrupt:
         done()
         print(
-            f"Download stopped. Run '{hai_model_command('pull ' + name, config_path)}' "
+            f"Download stopped. Run '{hai_model_command('pull ' + shlex.quote(name), config_path)}' "
             "to resume where it left off.",
             file=stream,
         )
@@ -189,11 +189,11 @@ def consented_pull(
 
     if not assume_yes:
         if not is_interactive():
-            cmd = hai_model_command(f"pull {name} --yes", config_path)
+            cmd = hai_model_command(f"pull {shlex.quote(name)} --yes", config_path)
             print(f"Nothing downloaded. To download it, run: {cmd}", file=out)
             return False
         if ask("Download it now?", "yN") != "y":
-            cmd = hai_model_command(f"pull {name}", config_path)
+            cmd = hai_model_command(f"pull {shlex.quote(name)}", config_path)
             print(f"Nothing downloaded. Later: {cmd}", file=out)
             return False
     return run_pull(env.base_url, name, config_path=config_path)
@@ -285,7 +285,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 1
     if not env.model_installed:
         print()
-        print(f"To install it: {hai_model_command('pull ' + env.model, config_path)}")
+        print(f"To install it: {hai_model_command('pull ' + shlex.quote(env.model), config_path)}")
         return 1
     if m.same_model(env.model, m.OLD_DEFAULT_MODEL):
         notice = m.old_default_notice(env.model)
@@ -389,7 +389,7 @@ def cmd_use(args: argparse.Namespace) -> int:
             for line in ollama_problem_lines(env):
                 print(line, file=sys.stderr)
             print(
-                f"Config not changed. To set it anyway: hai-model use {name} --no-pull",
+                f"Config not changed. To set it anyway: {hai_model_command(f'use {shlex.quote(name)} --no-pull', config_path)}",
                 file=sys.stderr,
             )
             return 1
@@ -397,7 +397,7 @@ def cmd_use(args: argparse.Namespace) -> int:
             if not consented_pull(
                 env, name, assume_yes=args.yes, force=args.force, config_path=config_path
             ):
-                print(f"Config not changed. To set it anyway: hai-model use {name} --no-pull")
+                print(f"Config not changed. To set it anyway: {hai_model_command(f'use {shlex.quote(name)} --no-pull', config_path)}")
                 return 1
 
     if catalog and not catalog.get(name):

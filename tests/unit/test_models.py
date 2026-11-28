@@ -746,3 +746,31 @@ class TestFifthReviewFixes:
         path, free, total = m.tightest_disk([])
         assert seen == [str(tmp_path)]
         assert free is not None and total
+
+
+class TestSixthReviewFixes:
+    def test_uncreated_ollama_models_counts_next_to_an_existing_home_folder(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(m.Path, "home", lambda: tmp_path)
+        (tmp_path / ".ollama" / "models").mkdir(parents=True)
+        target = tmp_path / "big" / "models"
+        monkeypatch.setenv("OLLAMA_MODELS", str(target))
+        dirs = m.ollama_model_dirs()
+        assert dirs[0] == target and tmp_path / ".ollama" / "models" in dirs
+
+    def test_odd_size_in_tags_does_not_crash(self, monkeypatch):
+        import requests
+
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return {"models": [{"name": "a", "size": "4.6 GB"}, {"name": "b", "size": None}]}
+
+            def raise_for_status(self):
+                pass
+
+        monkeypatch.setattr(requests, "get", lambda *a, **k: Response())
+        models = m.list_installed("http://localhost:11434")
+        assert [(x.name, x.size) for x in models] == [("a", 0), ("b", 0)]

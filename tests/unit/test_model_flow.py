@@ -699,3 +699,13 @@ def test_binding_json_keeps_a_plain_config_path(tmp_path):
     cfg = tmp_path / "remote.yaml"
     out = model_flow.suggest_only_json(model_flow.missing_model_message("phi4-mini", cfg), cfg)
     assert f"--config {cfg}" in _json.loads(out)["conversation"]
+
+
+def test_binding_json_placeholder_for_config_path_with_double_space(tmp_path):
+    import json as _json
+
+    from hai_sh import model_flow
+
+    cfg = tmp_path / "my  config.yaml"
+    out = model_flow.suggest_only_json(model_flow.missing_model_message("phi4-mini", cfg), cfg)
+    assert "--config YOUR_CONFIG_FILE" in _json.loads(out)["conversation"]
