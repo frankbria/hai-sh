@@ -709,3 +709,19 @@ def test_binding_json_placeholder_for_config_path_with_double_space(tmp_path):
     cfg = tmp_path / "my  config.yaml"
     out = model_flow.suggest_only_json(model_flow.missing_model_message("phi4-mini", cfg), cfg)
     assert "--config YOUR_CONFIG_FILE" in _json.loads(out)["conversation"]
+
+
+def test_setup_config_survives_quotes_and_newlines_in_values(tmp_path, monkeypatch):
+    import yaml as _yaml
+
+    from hai_sh import __main__ as main_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(main_mod, "get_config_path", lambda: tmp_path / "config.yaml", raising=False)
+    weird = 'evil"\nprovider: openai\n#'
+    main_mod._write_setup_config({"provider": "ollama", "ollama_model": weird})
+    from hai_sh.init import get_config_path
+
+    data = _yaml.safe_load(get_config_path().read_text())
+    assert data["provider"] == "ollama"
+    assert data["providers"]["ollama"]["model"] == weird

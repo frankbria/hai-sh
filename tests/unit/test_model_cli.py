@@ -304,3 +304,50 @@ class TestSixthReviewFixes:
         hint = model_flow.missing_model_hint("x; rm -rf ~")
         assert "pull 'x; rm -rf ~'" in hint
         assert "pull gemma4:e2b" in model_flow.missing_model_hint("gemma4:e2b")
+
+
+@pytest.mark.parametrize("cmd", [["use", "  ", "--no-pull"], ["pull", ""]])
+def test_empty_model_name_is_refused(cfg, capsys, cmd):
+    before = cfg.read_text()
+    assert run(cfg, *cmd) == 2
+    assert "Give a model name" in capsys.readouterr().err
+    assert cfg.read_text() == before
+
+
+class TestSeventhReviewFixes:
+    @pytest.mark.parametrize("text", ["providers:\n  ollama: disabled\n", "providers: [a]\n"])
+    def test_odd_ollama_section_stops_cleanly(self, tmp_path, capsys, text):
+        cfg = tmp_path / "c.yaml"
+        cfg.write_text(text)
+        with pytest.raises(SystemExit) as exc:
+            run(cfg, "status")
+        assert exc.value.code == 1
+        assert "Cannot read config" in capsys.readouterr().err
+
+    def test_odd_details_and_counters_from_ollama(self, monkeypatch):
+        import requests
+
+        class Tags:
+            status_code = 200
+
+            def json(self):
+                return {"models": [{"name": "a", "size": 1, "details": "unknown"}]}
+
+            def raise_for_status(self):
+                pass
+
+        monkeypatch.setattr(requests, "get", lambda *a, **k: Tags())
+        assert [x.name for x in model_cli.m.list_installed("http://x")] == ["a"]
+
+        class Pull:
+            status_code = 200
+
+            def iter_lines(self):
+                yield b'{"status": "pulling", "digest": "d", "total": "lots"}'
+                yield b'{"status": "success"}'
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(requests, "post", lambda *a, **k: Pull())
+        model_cli.m.pull_model("http://x", "a")  # no exception

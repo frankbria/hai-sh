@@ -236,7 +236,16 @@ def _load(args: argparse.Namespace) -> tuple:
         # that exists but can't be read or parsed stops here: going on with the
         # defaults could act on a different Ollama from the one the file names.
         if config_path.exists():
-            load_config_file(config_path)
+            raw = load_config_file(config_path)
+            providers = raw.get("providers")
+            ollama = providers.get("ollama") if isinstance(providers, dict) else None
+            if providers is not None and not isinstance(providers, dict) or (
+                ollama is not None and not isinstance(ollama, dict)
+            ):
+                raise ConfigError(
+                    f"{config_path}: providers.ollama should be a section with "
+                    "base_url and model"
+                )
         config = load_config(config_path=config_path, use_pydantic=False)
     except ConfigError as e:
         print(f"Cannot read config: {e}", file=sys.stderr)
@@ -362,6 +371,10 @@ def _table(headers: tuple, rows: List[tuple]) -> None:
 
 
 def cmd_pull(args: argparse.Namespace) -> int:
+    args.name = args.name.strip()
+    if not args.name:
+        print("Give a model name, for example: hai-model pull phi4-mini", file=sys.stderr)
+        return 2
     config, config_path = _load(args)
     oc = m.ollama_config(config)
     env = m.detect_environment(oc["base_url"], args.name)
@@ -381,6 +394,9 @@ def cmd_use(args: argparse.Namespace) -> int:
     config, config_path = _load(args)
     oc = m.ollama_config(config)
     name = args.name.strip()
+    if not name:
+        print("Give a model name, for example: hai-model use phi4-mini", file=sys.stderr)
+        return 2
     catalog = _catalog_or_none()
 
     if not args.no_pull:

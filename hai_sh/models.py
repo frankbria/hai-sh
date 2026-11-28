@@ -271,7 +271,8 @@ def list_installed(base_url: str) -> Optional[List[InstalledModel]]:
     for m in data.get("models") or []:
         if not isinstance(m, dict) or not m.get("name"):
             continue
-        details = m.get("details") or {}
+        details = m.get("details")
+        details = details if isinstance(details, dict) else {}
         try:
             size = int(m.get("size") or 0)
         except (TypeError, ValueError):
@@ -441,7 +442,9 @@ def detect_environment(base_url: str, model: str) -> ModelEnvironment:
 
 def ollama_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """The providers.ollama section with defaults filled in."""
-    section = dict(((config or {}).get("providers") or {}).get("ollama") or {})
+    providers = (config or {}).get("providers") if isinstance(config, dict) else None
+    ollama = providers.get("ollama") if isinstance(providers, dict) else None
+    section = dict(ollama) if isinstance(ollama, dict) else {}
     section.setdefault("base_url", "http://localhost:11434")
     section.setdefault("model", DEFAULT_OLLAMA_MODEL)
     return section
@@ -564,7 +567,10 @@ def pull_model(
             status = str(event.get("status", ""))
             digest = event.get("digest")
             if digest and event.get("total"):
-                layers[digest] = (int(event.get("completed") or 0), int(event["total"]))
+                try:
+                    layers[digest] = (int(event.get("completed") or 0), int(event["total"]))
+                except (TypeError, ValueError):
+                    pass  # progress is cosmetic; a bad counter doesn't stop the pull
             if on_progress:
                 done = sum(c for c, _ in layers.values())
                 total = sum(t for _, t in layers.values())
