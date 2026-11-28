@@ -51,8 +51,10 @@ def suggest_only_json(conversation: str, config_path: Optional[Path] = None) -> 
         raw = str(config_path)
         # The message is collapsed to single spaces, so a run of spaces or
         # any other whitespace in the path wouldn't survive either.
-        if "  " in raw or any(c in raw for c in "'\"\\") or any(
-            c < " " or c == "\x7f" or (c.isspace() and c != " ") for c in raw
+        if (
+            "  " in raw
+            or any(c in raw for c in "'\"\\")
+            or any(c < " " or c == "\x7f" or (c.isspace() and c != " ") for c in raw)
         ):
             quoted = shlex.quote(raw)
             if quoted in conversation:
@@ -64,6 +66,10 @@ def suggest_only_json(conversation: str, config_path: Optional[Path] = None) -> 
     text = text.replace("\\", "/").replace('"', "'")
     while "'''" in text:
         text = text.replace("'''", "'")
+    # The bindings split their parser's output on this marker; a model name,
+    # URL or path containing it would put the rest on the command line.
+    while "<<<SEPARATOR>>>" in text:
+        text = text.replace("<<<SEPARATOR>>>", "<<< SEPARATOR >>>")
     # ensure_ascii=False: a \uXXXX escape is a backslash too.
     return json.dumps({"conversation": text, "command": "", "confidence": 0}, ensure_ascii=False)
 
@@ -161,7 +167,9 @@ def missing_model_flow(
         picked = _pick_other(env, catalog, policy, exclude=model)
         if picked:
             env_other = m.detect_environment(oc["base_url"], picked)
-            if env_other.model_installed or consented_pull(env_other, picked, config_path=config_path):
+            if env_other.model_installed or consented_pull(
+                env_other, picked, config_path=config_path
+            ):
                 _offer_default(picked, config_path)
                 return _ollama_provider(config, picked)
         # Nothing picked or the download didn't happen: still offer the cloud.
@@ -183,7 +191,9 @@ def missing_model_flow(
 
 
 def _stop(model: str, config_path: Optional[Path] = None) -> None:
-    print(f"Nothing changed. To install it later: {hai_model_command('pull ' + shlex.quote(model), config_path)}")
+    print(
+        f"Nothing changed. To install it later: {hai_model_command('pull ' + shlex.quote(model), config_path)}"
+    )
     print(f"To see other models: {hai_model_command('list', config_path)}")
 
 
@@ -241,7 +251,9 @@ def _offer_default(name: str, config_path: Optional[Path]) -> None:
             return
         print(f"providers.ollama.model: {old or '(not set)'} -> {new}")
     else:
-        print(f"Using {name} for this question only. To keep it: {hai_model_command('use ' + shlex.quote(name), config_path)}")
+        print(
+            f"Using {name} for this question only. To keep it: {hai_model_command('use ' + shlex.quote(name), config_path)}"
+        )
 
 
 # --------------------------------------------------------------------------

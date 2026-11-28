@@ -239,10 +239,10 @@ def _load(args: argparse.Namespace) -> tuple:
             raw = load_config_file(config_path)
             providers = raw.get("providers")
             ollama = providers.get("ollama") if isinstance(providers, dict) else None
-            if (
-                providers is not None
-                and not isinstance(providers, dict)
-                or (ollama is not None and not isinstance(ollama, dict))
+            # "providers:" with nothing under it is None, which hai's
+            # validation can't take either.
+            if ("providers" in raw and not isinstance(providers, dict)) or (
+                ollama is not None and not isinstance(ollama, dict)
             ):
                 raise ConfigError(
                     f"{config_path}: providers.ollama should be a section with "
@@ -408,10 +408,11 @@ def _config_text(args: argparse.Namespace) -> Optional[str]:
 
 
 def cmd_use(args: argparse.Namespace) -> int:
-    # Read the text first: if the file changes later (say, base_url during a
-    # long download), the edit below stops instead of mixing old and new.
-    before = _config_text(args)
     config, config_path = _load(args)
+    # Read after _load, which may have just created a default config. If the
+    # file changes after this (say, base_url during a long download), the edit
+    # below stops instead of mixing old and new settings.
+    before = _config_text(args)
     oc = m.ollama_config(config)
     name = args.name.strip()
     if not name:

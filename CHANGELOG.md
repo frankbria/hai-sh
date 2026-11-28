@@ -80,8 +80,9 @@ Not yet published to PyPI.
   isn't valid YAML, isn't laid out the way hai expects, is a link to its own
   `.bak`, or was saved by something else while hai was updating it or
   downloading the model.
-- An unfinished Ollama address (such as `http://[::1`) or a `models:` setting
-  that isn't a section no longer crashes `hai-model`.
+- An unfinished Ollama address (such as `http://[::1`), a `models:` setting
+  that isn't a section, or an empty `providers:` line no longer crashes
+  `hai-model`.
 - In app mode, `--model` now applies to the provider app mode actually uses.
 - `hai-model` stops with "Cannot read config" when the config file exists but
   isn't valid, instead of going on with the defaults (and localhost's Ollama).
