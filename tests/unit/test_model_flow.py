@@ -489,3 +489,70 @@ class TestSetupWizard:
         seen = self._choose(monkeypatch, lambda opts: None)
         choose_setup_ollama_model(fake.url)
         assert not any("qwen" in o for o in seen["options"])
+
+
+class TestProviderAndModelFlags:
+    def _config(self, home, fake):
+        path = home / ".hai" / "config.yaml"
+        path.write_text(
+            "provider_priority: [ollama, openai]\n"
+            "providers:\n"
+            "  ollama:\n"
+            f'    base_url: "{fake.url}"\n'
+            '    model: "gemma4:e2b"\n'
+            "  openai:\n"
+            "    api_key: sk-test\n"
+            "    model: gpt-4o-mini\n"
+        )
+
+    def test_provider_flag_goes_first_even_with_a_priority_list(
+        self, home, fake, monkeypatch, capfd
+    ):
+        self._config(home, fake)
+        fake.installed["gemma4:e2b"] = 1
+        no_terminal(monkeypatch)
+        from hai_sh import providers
+
+        real_get = providers.get_provider
+        cloud = Mock()
+        cloud.check_availability.return_value = (True, None)
+        cloud.generate.return_value = json.dumps({"explanation": "cloud", "confidence": 80})
+        seen = {}
+
+        def get_provider(name, cfg):
+            if name == "openai":
+                seen["model"] = cfg.get("model")
+                return cloud
+            return real_get(name, cfg)
+
+        monkeypatch.setattr(providers, "get_provider", get_provider)
+        assert run_hai("--suggest-only", "--provider", "openai", "--model", "gpt-4.1", "x") == 0
+        assert json.loads(capfd.readouterr().out)["conversation"] == "cloud"
+        assert seen["model"] == "gpt-4.1"
+        assert fake.generate_requests == []  # Ollama was not used
+
+    def test_model_flag_without_provider_goes_to_the_first_in_the_list(
+        self, home, fake, monkeypatch
+    ):
+        self._config(home, fake)
+        fake.installed["phi4-mini:latest"] = 1
+        no_terminal(monkeypatch)
+        assert run_hai("--suggest-only", "--model", "phi4-mini", "x") == 0
+        assert fake.generate_requests == ["phi4-mini:latest"]
+
+
+def test_setup_wizard_keeps_a_commercial_policy(home):
+    from hai_sh.__main__ import _write_setup_config
+
+    cfg = home / ".hai" / "config.yaml"
+    cfg.write_text("models:\n  licence_policy: commercial\n")
+    _write_setup_config({"provider": "ollama"})
+    assert yaml.safe_load(cfg.read_text())["models"]["licence_policy"] == "commercial"
+
+
+def test_setup_wizard_new_config_policy_is_any(home):
+    from hai_sh.__main__ import _write_setup_config
+
+    _write_setup_config({"provider": "ollama"})
+    cfg = home / ".hai" / "config.yaml"
+    assert yaml.safe_load(cfg.read_text())["models"]["licence_policy"] == "any"

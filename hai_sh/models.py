@@ -495,25 +495,30 @@ def pull_model(
         raise PullError(_error_text(response) or f"Ollama returned HTTP {response.status_code}")
 
     finished = False
-    for raw in response.iter_lines():
-        if not raw:
-            continue
-        try:
-            event = json.loads(raw)
-        except (ValueError, TypeError):
-            continue
-        if event.get("error"):
-            raise PullError(str(event["error"]))
-        status = str(event.get("status", ""))
-        digest = event.get("digest")
-        if digest and event.get("total"):
-            layers[digest] = (int(event.get("completed") or 0), int(event["total"]))
-        if on_progress:
-            done = sum(c for c, _ in layers.values())
-            total = sum(t for _, t in layers.values())
-            on_progress(PullProgress(status=status, completed=done, total=total))
-        if status == "success":
-            finished = True
+    try:
+        for raw in response.iter_lines():
+            if not raw:
+                continue
+            try:
+                event = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if event.get("error"):
+                raise PullError(str(event["error"]))
+            status = str(event.get("status", ""))
+            digest = event.get("digest")
+            if digest and event.get("total"):
+                layers[digest] = (int(event.get("completed") or 0), int(event["total"]))
+            if on_progress:
+                done = sum(c for c, _ in layers.values())
+                total = sum(t for _, t in layers.values())
+                on_progress(PullProgress(status=status, completed=done, total=total))
+            if status == "success":
+                finished = True
+    except requests.exceptions.RequestException as e:
+        raise PullError(f"The connection to Ollama was lost during the download: {e}") from e
+    finally:
+        response.close()
     if not finished:
         raise PullError("The download stopped before Ollama reported success.")
 
@@ -548,6 +553,8 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
     old: Optional[str] = None
 
     new_text = _edit_model_line(original, name)
+    if new_text is not None and not _only_model_changed(original, new_text[0], name):
+        new_text = None  # e.g. a multi-line YAML value; rewrite the file instead
     if new_text is not None:
         new_text, old = new_text
     else:
@@ -563,14 +570,44 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
         new_text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
 
     if config_path.exists():
-        backup = config_path.with_name(config_path.name + ".bak")
-        backup.write_text(original)
-        backup.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        _write_private(config_path.with_name(config_path.name + ".bak"), original)
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(new_text)
-    config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    _write_private(config_path, new_text)
     return old, name
+
+
+def _write_private(path: Path, text: str) -> None:
+    """
+    Write ``text`` to ``path`` readable only by the owner. The file is created
+    with mode 600 (and an existing one is narrowed before anything is written),
+    so API keys in the config are never readable by others, even briefly.
+    """
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
+    try:
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = -1
+            f.write(text)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def _only_model_changed(original: str, edited: str, name: str) -> bool:
+    """True if ``edited`` parses and differs from ``original`` only in the model."""
+    try:
+        before = yaml.safe_load(original) or {}
+        after = yaml.safe_load(edited) or {}
+    except yaml.YAMLError:
+        return False
+    try:
+        if after["providers"]["ollama"]["model"] != name:
+            return False
+        before["providers"]["ollama"]["model"] = name
+    except (KeyError, TypeError):
+        return False
+    return before == after
 
 
 def _indent(line: str) -> int:

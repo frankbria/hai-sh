@@ -448,3 +448,79 @@ def test_ollama_config_defaults():
         "base_url": "http://localhost:11434",
         "model": DEFAULT_OLLAMA_MODEL,
     }
+
+
+class TestReviewFixes:
+    def test_backup_and_config_are_never_world_readable(self, tmp_path):
+        import os
+
+        path = tmp_path / "config.yaml"
+        path.write_text('providers:\n  ollama:\n    model: "a"\n    api_key: secret\n')
+        path.chmod(0o644)
+        old_umask = os.umask(0o022)
+        try:
+            m.set_config_model(path, "b")
+        finally:
+            os.umask(old_umask)
+        for p in (path, tmp_path / "config.yaml.bak"):
+            assert stat.S_IMODE(p.stat().st_mode) == 0o600, p
+
+    def test_existing_world_readable_backup_is_narrowed(self, tmp_path):
+        path = tmp_path / "config.yaml"
+        path.write_text('providers:\n  ollama:\n    model: "a"\n')
+        backup = tmp_path / "config.yaml.bak"
+        backup.write_text("old")
+        backup.chmod(0o644)
+        m.set_config_model(path, "b")
+        assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+        assert 'model: "a"' in backup.read_text()
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "model: >-\n      gemma4:e2b\n",
+            "model: |\n      gemma4:e2b\n",
+            "model:\n      gemma4:e2b\n",
+        ],
+    )
+    def test_multiline_model_value_is_rewritten_not_corrupted(self, tmp_path, value):
+        path = tmp_path / "config.yaml"
+        path.write_text(f"providers:\n  ollama:\n    base_url: http://h:1\n    {value}")
+        old, new = m.set_config_model(path, "phi4-mini")
+        data = yaml.safe_load(path.read_text())
+        assert data["providers"]["ollama"] == {"base_url": "http://h:1", "model": "phi4-mini"}
+        assert old.strip() == "gemma4:e2b"  # a literal block keeps its newline
+
+    def test_connection_lost_mid_stream_is_a_pull_error(self, monkeypatch):
+        import requests
+
+        class Response:
+            status_code = 200
+
+            def iter_lines(self):
+                yield b'{"status": "pulling aaa", "digest": "d", "total": 10, "completed": 1}'
+                raise requests.exceptions.ConnectionError("reset by peer")
+
+            def close(self):
+                self.closed = True
+
+        monkeypatch.setattr(requests, "post", lambda *a, **k: Response())
+        with pytest.raises(m.PullError, match="connection to Ollama was lost"):
+            m.pull_model("http://localhost:11434", "x")
+
+    def test_read_timeout_mid_stream_is_a_pull_error(self, monkeypatch):
+        import requests
+
+        class Response:
+            status_code = 200
+
+            def iter_lines(self):
+                raise requests.exceptions.ReadTimeout("stalled")
+                yield  # pragma: no cover
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(requests, "post", lambda *a, **k: Response())
+        with pytest.raises(m.PullError):
+            m.pull_model("http://localhost:11434", "x")

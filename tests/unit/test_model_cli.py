@@ -260,3 +260,16 @@ def test_entry_point_is_declared():
     text = Path(__file__).resolve().parents[2].joinpath("pyproject.toml").read_text()
     assert 'hai-model = "hai_sh.model_cli:main"' in text
     assert '"data/*.yaml"' in text
+
+
+def test_missing_config_file_uses_defaults_not_the_home_config(tmp_path, fake, monkeypatch, capsys):
+    """--config remote.yaml that doesn't exist must not fall back to ~/.hai/config.yaml."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".hai").mkdir()
+    (tmp_path / ".hai" / "config.yaml").write_text(
+        f'providers:\n  ollama:\n    base_url: "{fake.url}"\n    model: other\n'
+    )
+    run(tmp_path / "remote.yaml", "status")
+    out = capsys.readouterr().out
+    assert fake.url not in out
+    assert "localhost:11434" in out

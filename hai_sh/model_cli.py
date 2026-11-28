@@ -209,9 +209,8 @@ def _load(args: argparse.Namespace) -> tuple:
 
     config_path = Path(args.config).expanduser() if args.config else get_config_path()
     try:
-        config = load_config(
-            config_path=config_path if config_path.exists() else None, use_pydantic=False
-        )
+        # A missing file gives the defaults (never another config file).
+        config = load_config(config_path=config_path, use_pydantic=False)
     except ConfigError as e:
         print(f"Cannot read config: {e}", file=sys.stderr)
         raise SystemExit(1) from None
