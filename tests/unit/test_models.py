@@ -224,8 +224,16 @@ def test_disk_space_and_ram_are_numbers():
     assert ram is None or ram > 0
 
 
-def test_disk_space_bad_path():
+def test_disk_space_unreadable_disk(monkeypatch):
+    def fail(path):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(m.shutil, "disk_usage", fail)
     assert m.disk_space(Path("/definitely/not/here")) == (None, None)
+
+
+def test_disk_space_missing_path_measures_its_parent_disk():
+    assert m.disk_space(Path("/definitely/not/here")) == m.disk_space(Path("/"))
 
 
 # --------------------------------------------------------------------------
@@ -702,3 +710,39 @@ class TestFourthReviewFixes:
             m.set_config_model(path, "b")
         assert path.read_text() == text
         assert not (tmp_path / "config.yaml.bak").exists()
+
+
+class TestFifthReviewFixes:
+    @pytest.mark.parametrize("line", [b"null", b"[1, 2]", b'"pulling"', b"7"])
+    def test_pull_event_that_is_not_an_object_is_a_pull_error(self, monkeypatch, line):
+        import requests
+
+        class Response:
+            status_code = 200
+
+            def iter_lines(self):
+                yield line
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(requests, "post", lambda *a, **k: Response())
+        with pytest.raises(m.PullError, match="unexpected reply"):
+            m.pull_model("http://localhost:11434", "x")
+
+    def test_first_pull_measures_the_disk_ollama_will_create_its_folder_on(
+        self, tmp_path, monkeypatch
+    ):
+        target = tmp_path / "not" / "yet" / "models"
+        monkeypatch.setenv("OLLAMA_MODELS", str(target))
+        seen = []
+        real = m.shutil.disk_usage
+
+        def usage(path):
+            seen.append(path)
+            return real(path)
+
+        monkeypatch.setattr(m.shutil, "disk_usage", usage)
+        path, free, total = m.tightest_disk([])
+        assert seen == [str(tmp_path)]
+        assert free is not None and total

@@ -341,7 +341,15 @@ def tightest_disk(dirs: List[Path]) -> Tuple[Optional[Path], Optional[int], Opti
         if best_room is None or room < best_room:
             best, best_room = (path, free, total), room
     if best[1] is None:
-        free, total = disk_space(dirs[0] if dirs else None)
+        # No models directory yet (first pull). Ollama creates $OLLAMA_MODELS
+        # if set, else ~/.ollama/models; measure the disk it will land on.
+        if dirs:
+            target: Optional[Path] = dirs[0]
+        elif os.environ.get("OLLAMA_MODELS"):
+            target = Path(os.environ["OLLAMA_MODELS"]).expanduser()
+        else:
+            target = None
+        free, total = disk_space(target)
         best = (dirs[0] if dirs else None, free, total)
     return best
 
@@ -351,6 +359,9 @@ def disk_space(path: Optional[Path]) -> Tuple[Optional[int], Optional[int]]:
     probe = path
     if probe is None:
         probe = Path.home()
+    # A directory Ollama hasn't created yet lives on its nearest existing parent's disk.
+    while not probe.exists() and probe.parent != probe:
+        probe = probe.parent
     try:
         usage = shutil.disk_usage(str(probe))
         return usage.free, usage.total
@@ -539,6 +550,8 @@ def pull_model(
                 event = json.loads(raw)
             except (ValueError, TypeError):
                 continue
+            if not isinstance(event, dict):
+                raise PullError(f"Ollama sent an unexpected reply while downloading: {raw[:80]!r}")
             if event.get("error"):
                 raise PullError(str(event["error"]))
             status = str(event.get("status", ""))

@@ -17,6 +17,7 @@ Rules (docs/design/model-management.md sections 5 and 8):
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -34,14 +35,26 @@ from hai_sh.model_cli import (
 ProviderChoice = Tuple[Any, str]  # (provider instance, provider name)
 
 
-def suggest_only_json(conversation: str) -> str:
+def suggest_only_json(conversation: str, config_path: Optional[Path] = None) -> str:
     """
     The JSON the shell bindings read, with no command. Shell integration
     files installed before v0.1.5 embed the JSON in a Python triple-quoted
     string, where any JSON escape (a quote, a control character, \\uXXXX)
     breaks it, so hai's own messages contain none: one line, no backslashes,
     no double quotes, no triple quotes.
+
+    A ``--config`` path that can't be written without one of those (an
+    apostrophe needs a double quote or a backslash in shell) is shown as
+    YOUR_CONFIG_FILE rather than as a command for a different path.
     """
+    if config_path is not None:
+        raw = str(config_path)
+        if any(c in raw for c in "'\"\\") or any(c < " " or c == "\x7f" for c in raw):
+            quoted = shlex.quote(raw)
+            if quoted in conversation:
+                conversation = conversation.replace(quoted, "YOUR_CONFIG_FILE") + (
+                    " (YOUR_CONFIG_FILE is the file you passed to --config.)"
+                )
     text = " ".join(conversation.split())
     text = "".join(c for c in text if c >= " " and c != "\x7f")
     text = text.replace("\\", "/").replace('"', "'")

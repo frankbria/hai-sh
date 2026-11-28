@@ -675,3 +675,27 @@ def test_app_mode_model_flag_follows_the_provider_not_the_priority_list():
     apply_cli_overrides(config, None, "phi4-mini", app_mode=True)
     assert config["providers"]["ollama"]["model"] == "phi4-mini"
     assert config["providers"]["openai"]["model"] == "gpt-4o"
+
+
+@pytest.mark.parametrize("name", ["it's.yaml", 'say"hi.yaml', "back\\slash.yaml"])
+def test_binding_json_never_shows_a_mangled_config_path(tmp_path, name):
+    import json as _json
+
+    from hai_sh import model_flow
+
+    cfg = tmp_path / name
+    out = model_flow.suggest_only_json(model_flow.missing_model_message("phi4-mini", cfg), cfg)
+    text = _json.loads(out)["conversation"]
+    assert "--config YOUR_CONFIG_FILE" in text
+    assert name not in text
+    assert "\\" not in out and '\\"' not in out
+
+
+def test_binding_json_keeps_a_plain_config_path(tmp_path):
+    import json as _json
+
+    from hai_sh import model_flow
+
+    cfg = tmp_path / "remote.yaml"
+    out = model_flow.suggest_only_json(model_flow.missing_model_message("phi4-mini", cfg), cfg)
+    assert f"--config {cfg}" in _json.loads(out)["conversation"]
