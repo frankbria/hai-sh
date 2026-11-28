@@ -19,12 +19,16 @@
 #                       split on whitespace and ':'; ./ and cwd prefixes
 #                       stripped; .git ignored) must be equal.
 #            lines    - sorted, whitespace-normalised stdout lines equal.
+#            ordered  - the same lines in the same order (for sorting tasks).
+#            size_order - the same entries of `dir` as ref, listed in order of
+#                       apparent size (either direction; ties in any order).
 #            number   - the single integer in ref stdout appears among the
 #                       numbers in the model's stdout (at most 3 numbers).
 #            contains - every ref token appears in model stdout, and model
 #                       stdout has at most `ratio` x as many tokens.
 #          If `post` is set, it runs after the command in the same copy and
-#          its stdout is compared with `lines` instead (for file changes).
+#          its stdout is compared with `lines` instead (for file changes);
+#          both post-checks must exit 0.
 #          `alt` lists other reference commands that are also correct.
 #   match: `accept` regexes (any match passes), `reject` regexes (any match
 #          fails). Used where output depends on the machine (ports, processes).
@@ -73,7 +77,9 @@ cases:
   - id: F10
     kind: command
     query: list the files in src sorted by size
-    exec: {ref: "ls -S src", compare: names}
+    # the order is the answer, so check it against real sizes ("names" alone
+    # would pass any listing of src)
+    exec: {ref: "ls -S src", compare: size_order, dir: src}
   - id: F11
     kind: command
     query: show the disk usage of each top-level directory here
@@ -81,7 +87,9 @@ cases:
   - id: F12
     kind: command
     query: what's the total size of the photos folder
-    exec: {ref: "du -sh photos", compare: names}
+    # the size is the answer, so "contains" (not "names", which keeps only the
+    # folder name and would pass `echo photos`)
+    exec: {ref: "du -sh photos", compare: contains, alt: ["du -s photos", "du -sk photos", "du -sm photos", "du -sb photos"]}
 
   # ---------------------------------------------------------------- text
   - id: T01
@@ -115,7 +123,8 @@ cases:
   - id: T08
     kind: command
     query: sort data.csv by age numerically
-    exec: {ref: "sort -t, -k2 -n data.csv", compare: lines, alt: ["tail -n +2 data.csv | sort -t, -k2 -n"]}
+    # order is the answer, so "ordered" (not "lines", which sorts both sides)
+    exec: {ref: "sort -t, -k2 -n data.csv", compare: ordered, alt: ["tail -n +2 data.csv | sort -t, -k2 -n", "(head -n 1 data.csv; tail -n +2 data.csv | sort -t, -k2 -n)"]}
   - id: T09
     kind: command
     query: replace foo with bar in config.json

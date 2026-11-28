@@ -237,7 +237,8 @@ def main() -> int:
     done = done_keys(raw_path)
     for model in models:
         m = meta["models"].setdefault(model, {})
-        if model not in ol.tags() and not args.no_pull:
+        installed = ol.tags()
+        if model not in installed and model + ":latest" not in installed and not args.no_pull:
             t0 = time.time()
             ok, msg = ol.pull(model)
             m.update(pulled=ok, pull_msg=msg, pull_s=round(time.time() - t0, 1))
@@ -311,7 +312,8 @@ def main() -> int:
                         parsed = parse_response(row["raw"])
                         row["parsed"] = parsed
                         row["json_ok"] = True
-                    except ValueError as e:
+                    except (ValueError, TypeError) as e:
+                        # TypeError: valid JSON that isn't an object (e.g. null)
                         row["json_ok"] = False
                         row["parse_error"] = str(e)[:300]
                         fb = extract_fallback_response(row["raw"])

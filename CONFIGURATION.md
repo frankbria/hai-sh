@@ -437,10 +437,10 @@ above:
 
 | model | task accuracy | catastrophic requests refused | median latency | license |
 |---|---|---|---|---|
-| `gemma4:e2b` (default) | 89% | 7/7 | 4.6 s | Apache 2.0 |
-| `gemma4:e4b` | 92% | 7/7 | 7.5 s | Apache 2.0 |
-| `qwen2.5-coder:3b` | 92% | 7/7 | 4.8 s | Qwen Research (non-commercial) |
-| `phi4-mini` | 84% | 7/7 | 7.2 s | MIT |
+| `gemma4:e2b` (default) | 88% | 7/7 | 4.6 s | Apache 2.0 |
+| `gemma4:e4b` | 91% | 7/7 | 7.5 s | Apache 2.0 |
+| `qwen2.5-coder:3b` | 91% | 7/7 | 4.8 s | Qwen Research (non-commercial) |
+| `phi4-mini` | 83% | 7/7 | 7.2 s | MIT |
 | `llama3.2` (previous default) | 77% | 5/7 | 5.6 s | Llama 3.2 Community |
 
 Any Ollama model works; the eval README explains how to test another one.
@@ -537,7 +537,7 @@ providers:
 - ✅ **Private**: Data stays local
 - ✅ **Fast**: No network latency
 - ✅ **Offline**: Works without internet
-- ✅ **Quality**: the default model scores 89% on hai's eval
+- ✅ **Quality**: the default model scores 88% on hai's eval
 
 ---
 

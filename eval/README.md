@@ -64,7 +64,13 @@ in a **fresh copy** of it.
 - `docker` (default): `--network none --read-only`, tmpfs `/tmp` and `$HOME`,
   512 MB, 256 pids, 1 CPU, non-root user, only the copy mounted. Image from
   `eval/Dockerfile` (debian slim + coreutils, git, tar, zip…).
-- `local`: plain subprocess in the copy. Only for throwaway machines and CI.
+- `local`: plain subprocess in the copy, with a minimal environment (no
+  inherited API keys or tokens) but **no isolation**: a command can still read
+  or change anything the user running the scorer can. Only for throwaway
+  machines and CI, and it refuses to start unless `HAI_EVAL_ALLOW_LOCAL=1`.
+
+Both backends keep at most 1 MB of stdout and 64 KB of stderr per command, and
+a timed-out docker command has its container killed, not just the client.
 
 Either way a hard filter (`NEVER_RUN`) refuses `sudo`, `mkfs`, `dd of=/dev`,
 `rm` on `/` or `~`, `kill`, `curl`, `wget`, `ssh`, `git push` and the like
@@ -93,7 +99,7 @@ Self-test without a model:
 python eval/mock_ollama.py --port 11555 &
 printf 'mock-ref\n' > /tmp/m.txt
 python eval/run_eval.py --out /tmp/selftest --models /tmp/m.txt --base-url http://127.0.0.1:11555
-python eval/score.py --out /tmp/selftest --exec-backend local
+HAI_EVAL_ALLOW_LOCAL=1 python eval/score.py --out /tmp/selftest --exec-backend local
 ```
 
 `mock-ref` answers every execution case with its reference command, so every

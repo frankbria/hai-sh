@@ -17,12 +17,19 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 from fixture import GIT_ENV, copy
 
 IMAGE = "hai-eval-sandbox:1"
+
+# Most bytes kept from a command's stdout / stderr. The rest is read and
+# dropped, so a command that floods its output cannot exhaust host memory.
+MAX_STDOUT = 1 << 20
+MAX_STDERR = 64 << 10
 
 # Never executed, whatever the backend.
 NEVER_RUN = re.compile(
@@ -48,6 +55,12 @@ class Sandbox:
         timeout: int = 20,
         scratch: Path | None = None,
     ):
+        if backend == "local" and os.environ.get("HAI_EVAL_ALLOW_LOCAL") != "1":
+            raise RuntimeError(
+                "The local backend runs model-written commands on this machine "
+                "with no isolation. Set HAI_EVAL_ALLOW_LOCAL=1 only on a throwaway "
+                "machine or CI runner."
+            )
         self.pristine = pristine.resolve()
         self.backend = backend
         self.timeout = timeout
@@ -87,10 +100,13 @@ class Sandbox:
 
     def _docker(self, command: str, work: Path) -> Result:
         uid, gid = os.getuid(), os.getgid()
+        name = f"hai-eval-{uuid.uuid4().hex[:12]}"
         args = [
             "docker",
             "run",
             "--rm",
+            "--name",
+            name,
             "--network",
             "none",
             "--read-only",
@@ -116,21 +132,76 @@ class Sandbox:
         for k, v in GIT_ENV.items():
             args += ["-e", f"{k}={v}"]
         args += [IMAGE, "bash", "-c", command]
-        p = subprocess.run(args, capture_output=True, text=True, timeout=self.timeout + 10)
-        return Result(p.stdout, p.stderr, p.returncode)
+
+        def stop_container() -> None:
+            # Killing the docker client leaves the container running; stop it.
+            subprocess.run(
+                ["docker", "kill", name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+
+        out, err, code = run_capped(args, self.timeout + 10, on_timeout=stop_container)
+        return Result(out, err, code)
 
     def _local(self, command: str, work: Path) -> Result:
         command = command.replace(str(self.pristine), str(work))
-        env = dict(os.environ, HOME=str(work.parent / "home"), **GIT_ENV)
+        # Only what the commands need, so nothing in the caller's environment
+        # (API keys, tokens, cloud credentials) is visible to them.
+        env = {
+            "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+            "HOME": str(work.parent / "home"),
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            **GIT_ENV,
+        }
         (work.parent / "home").mkdir(exist_ok=True)
-        p = subprocess.run(
-            ["bash", "-c", command],
-            cwd=work,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=self.timeout,
-        )
+        out, err, code = run_capped(["bash", "-c", command], self.timeout, cwd=work, env=env)
         # make outputs look like the docker backend (paths under pristine)
-        out = p.stdout.replace(str(work), str(self.pristine))
-        return Result(out, p.stderr, p.returncode)
+        out = out.replace(str(work), str(self.pristine))
+        return Result(out, err, code)
+
+
+def _drain(stream, limit: int, sink: list) -> None:
+    kept = 0
+    while True:
+        chunk = stream.read(65536)
+        if not chunk:
+            break
+        if kept < limit:
+            sink.append(chunk[: limit - kept])
+            kept += len(sink[-1])
+    stream.close()
+
+
+def run_capped(args, timeout, cwd=None, env=None, on_timeout=None) -> tuple[str, str, int]:
+    """subprocess.run with bounded output buffering.
+
+    Keeps at most MAX_STDOUT / MAX_STDERR bytes of each stream. Raises
+    subprocess.TimeoutExpired after killing the process (and calling
+    ``on_timeout``, e.g. to stop a container) if it runs past ``timeout``.
+    """
+    p = subprocess.Popen(args, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out: list[bytes] = []
+    err: list[bytes] = []
+    readers = [
+        threading.Thread(target=_drain, args=(p.stdout, MAX_STDOUT, out), daemon=True),
+        threading.Thread(target=_drain, args=(p.stderr, MAX_STDERR, err), daemon=True),
+    ]
+    for t in readers:
+        t.start()
+    try:
+        p.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        if on_timeout:
+            on_timeout()
+        p.kill()
+        p.wait()
+        for t in readers:
+            t.join(timeout=5)
+        raise
+    for t in readers:
+        t.join()
+    dec = lambda parts: b"".join(parts).decode("utf-8", errors="replace")  # noqa: E731
+    return dec(out), dec(err), p.returncode
