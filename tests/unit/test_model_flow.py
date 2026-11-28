@@ -468,13 +468,22 @@ class TestSetupWizard:
         assert choose_setup_ollama_model(fake.url) == "gemma4:e2b"
         assert fake.pull_requests == ["gemma4:e2b"]
 
-    def test_ollama_down_keeps_the_default(self, home, monkeypatch, capsys):
+    def test_ollama_down_still_offers_the_menu(self, home, monkeypatch, capsys):
         from hai_sh.__main__ import choose_setup_ollama_model
 
         monkeypatch.setattr(model_cli.m.shutil, "which", lambda n: None)
-        monkeypatch.setattr("hai_sh.gum.choose", lambda *a, **k: pytest.fail("no menu"))
-        assert choose_setup_ollama_model("http://127.0.0.1:9") == "gemma4:e2b"
-        assert "hai-model pull gemma4:e2b" in capsys.readouterr().out
+        seen = self._choose(monkeypatch, lambda opts: next(o for o in opts if o.startswith("phi4-mini")))
+        assert choose_setup_ollama_model("http://127.0.0.1:9") == "phi4-mini"
+        assert all("installed" not in o for o in seen["options"])
+        assert seen["options"][-1] == "Another model (type its name)"
+        assert "hai-model pull phi4-mini" in capsys.readouterr().out
+
+    def test_ollama_down_and_cancel_returns_none(self, home, monkeypatch):
+        from hai_sh.__main__ import choose_setup_ollama_model
+
+        monkeypatch.setattr(model_cli.m.shutil, "which", lambda n: None)
+        self._choose(monkeypatch, lambda opts: None)
+        assert choose_setup_ollama_model("http://127.0.0.1:9") is None
 
     def test_cancel_returns_none(self, home, fake, monkeypatch):
         from hai_sh.__main__ import choose_setup_ollama_model
@@ -556,3 +565,52 @@ def test_setup_wizard_new_config_policy_is_any(home):
     _write_setup_config({"provider": "ollama"})
     cfg = home / ".hai" / "config.yaml"
     assert yaml.safe_load(cfg.read_text())["models"]["licence_policy"] == "any"
+
+
+class TestConfigFlagInHints:
+    def test_suggest_only_hint_names_the_config_file(self, tmp_path, home, fake, capfd, monkeypatch):
+        other = tmp_path / "remote config.yaml"
+        other.write_text(
+            "provider: ollama\nproviders:\n  ollama:\n"
+            f'    base_url: "{fake.url}"\n    model: "gemma4:e2b"\n'
+        )
+        no_terminal(monkeypatch)
+        assert run_hai("--config", str(other), "--suggest-only", "list", "files") == 0
+        out, err = capfd.readouterr()
+        data = json.loads(out)
+        assert f"hai-model --config '{other}' pull gemma4:e2b" in data["conversation"]
+        assert "\\" not in out and err == ""
+
+    def test_pipe_hint_names_the_config_file(self, tmp_path, home, fake, capfd, monkeypatch):
+        other = tmp_path / "remote.yaml"
+        other.write_text(f'providers:\n  ollama:\n    base_url: "{fake.url}"\n')
+        no_terminal(monkeypatch)
+        assert run_hai("--config", str(other), "list", "files") == 1
+        assert f"hai-model --config {other} pull gemma4:e2b" in capfd.readouterr().err
+
+    def test_default_config_gives_the_plain_command(self, home):
+        from hai_sh.init import get_config_path
+
+        assert model_cli.hai_model_command("pull x") == "hai-model pull x"
+        assert model_cli.hai_model_command("pull x", get_config_path()) == "hai-model pull x"
+
+    def test_hai_model_with_config_repeats_it(self, tmp_path, home, fake, capsys, monkeypatch):
+        other = tmp_path / "remote.yaml"
+        other.write_text(f'providers:\n  ollama:\n    base_url: "{fake.url}"\n')
+        no_terminal(monkeypatch)
+        assert model_cli.main(["--config", str(other), "pull", "gemma4:e2b"]) == 1
+        assert f"hai-model --config {other} pull gemma4:e2b --yes" in capsys.readouterr().out
+
+
+def test_setup_config_is_private_from_the_start(home, monkeypatch):
+    from hai_sh.__main__ import _write_setup_config
+    from hai_sh.init import get_config_path
+
+    old = os.umask(0o022)
+    try:
+        _write_setup_config({"provider": "openai", "openai_api_key": "sk-test"})
+    finally:
+        os.umask(old)
+    path = get_config_path()
+    assert oct(path.stat().st_mode & 0o777) == "0o600"
+    assert "sk-test" in path.read_text()

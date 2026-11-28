@@ -545,14 +545,11 @@ def choose_setup_ollama_model(base_url: str) -> Optional[str]:
         catalog = None
 
     if not env.running:
+        # Still let them choose: only the download waits for Ollama.
         print()
         for line in model_flow.ollama_problem_lines(env):
             print(line)
-        print(
-            f"hai will use {DEFAULT_OLLAMA_MODEL}. Once Ollama runs, install it with: "
-            f"hai-model pull {DEFAULT_OLLAMA_MODEL}"
-        )
-        return DEFAULT_OLLAMA_MODEL
+        print("You can still choose the model now and download it once Ollama runs.")
 
     try:
         from hai_sh.config import load_config
@@ -590,6 +587,10 @@ def choose_setup_ollama_model(base_url: str) -> Optional[str]:
         model = typed.strip()
     else:
         model = options[choice]
+
+    if not env.running:
+        print(f"hai will use {model}. Once Ollama runs, install it with: hai-model pull {model}")
+        return model
 
     model_env = m.detect_environment(base_url, model)
     if not model_env.model_installed:
@@ -677,9 +678,10 @@ def _write_setup_config(updates: dict) -> None:
         "  use_colors: true",
     ])
 
-    config_path.write_text("\n".join(lines) + "\n")
-    import stat
-    config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    from hai_sh import models as m
+
+    # Mode 600 from the start (it may hold API keys), replaced atomically.
+    m.replace_private(config_path, "\n".join(lines) + "\n")
 
 
 def run_history_search() -> int:
@@ -806,6 +808,13 @@ def main():
         # Parse arguments
         parser = create_parser()
         args = parser.parse_args()
+
+        if args.suggest_only:
+            # The shell binding without gum reads stderr with the JSON, so a
+            # Python warning printed now would break the reply.
+            import warnings
+
+            warnings.simplefilter("ignore")
 
         # Handle --setup wizard
         if args.setup:
@@ -970,12 +979,14 @@ def main():
                 response = generate(provider)
             except OllamaModelNotFoundError as e:
                 if args.suggest_only:
-                    print(model_flow.suggest_only_json(model_flow.missing_model_message(e.model)))
+                    print(model_flow.suggest_only_json(
+                        model_flow.missing_model_message(e.model, config_path)
+                    ))
                     return 0
                 if not model_flow.is_interactive():
                     handle_provider_error(
                         f"Model '{e.model}' isn't installed in Ollama.",
-                        model_flow.missing_model_hint(e.model),
+                        model_flow.missing_model_hint(e.model, config_path),
                     )
                     return 1
                 choice = model_flow.missing_model_flow(config, e.model, config_path)
@@ -986,7 +997,7 @@ def main():
         except OllamaModelNotFoundError as e:
             handle_provider_error(
                 f"Model '{e.model}' isn't installed in Ollama.",
-                f"Run: hai-model pull {e.model}",
+                f"Run: {model_flow.hai_model_command('pull ' + e.model, config_path)}",
             )
             return 1
         except Exception as e:

@@ -524,3 +524,94 @@ class TestReviewFixes:
         monkeypatch.setattr(requests, "post", lambda *a, **k: Response())
         with pytest.raises(m.PullError):
             m.pull_model("http://localhost:11434", "x")
+
+
+class TestSecondReviewFixes:
+    def test_failed_write_leaves_the_old_config_whole(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.yaml"
+        original = 'providers:\n  ollama:\n    model: "a"\n    api_key: secret\n'
+        path.write_text(original)
+
+        def full_disk(fd):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(m.os, "fsync", full_disk)
+        with pytest.raises(OSError):
+            m.set_config_model(path, "b")
+        assert path.read_text() == original
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["config.yaml", "config.yaml.bak"]
+
+    def test_symlinked_config_keeps_its_link(self, tmp_path):
+        real = tmp_path / "dotfiles" / "hai.yaml"
+        real.parent.mkdir()
+        real.write_text('providers:\n  ollama:\n    model: "a"\n')
+        link = tmp_path / "config.yaml"
+        link.symlink_to(real)
+        m.set_config_model(link, "b")
+        assert link.is_symlink()
+        assert 'model: "b"' in real.read_text()
+        assert stat.S_IMODE(real.stat().st_mode) == 0o600
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # ollama defines the anchor, openai reuses it
+            "providers:\n"
+            "  ollama: &shared\n"
+            "    model: gpt-4o-mini\n"
+            "    timeout: 30\n"
+            "  openai: *shared\n",
+            # both reuse an anchor defined elsewhere
+            "base: &shared\n"
+            "  model: gpt-4o-mini\n"
+            "providers:\n"
+            "  ollama: *shared\n"
+            "  openai: *shared\n",
+        ],
+    )
+    def test_yaml_alias_shared_with_another_provider_is_not_changed(self, tmp_path, text):
+        path = tmp_path / "config.yaml"
+        path.write_text(text)
+        old, _ = m.set_config_model(path, "phi4-mini")
+        data = yaml.safe_load(path.read_text())
+        assert old == "gpt-4o-mini"
+        assert data["providers"]["ollama"]["model"] == "phi4-mini"
+        assert data["providers"]["openai"]["model"] == "gpt-4o-mini"
+
+    def test_disk_check_uses_the_fullest_candidate_disk(self, tmp_path, monkeypatch):
+        home_models = tmp_path / "home" / ".ollama" / "models"
+        service = tmp_path / "service"
+        home_models.mkdir(parents=True)
+        service.mkdir()
+        free = {home_models: (500, 1000), service: (10, 1000)}
+        monkeypatch.setattr(m, "disk_space", lambda p: free.get(p, (None, None)))
+        assert m.tightest_disk([home_models, service]) == (service, 10, 1000)
+        assert m.tightest_disk([]) == (None, None, None)
+
+    def test_model_dirs_lists_every_existing_candidate(self, tmp_path, monkeypatch):
+        env_dir = tmp_path / "custom"
+        env_dir.mkdir()
+        (tmp_path / ".ollama" / "models").mkdir(parents=True)
+        monkeypatch.setenv("OLLAMA_MODELS", str(env_dir))
+        monkeypatch.setenv("HOME", str(tmp_path))
+        dirs = m.ollama_model_dirs()
+        assert dirs[:2] == [env_dir, tmp_path / ".ollama" / "models"]
+
+    def test_urllib3_libressl_warning_is_hidden(self):
+        import subprocess
+        import sys
+
+        code = (
+            "import hai_sh, warnings\n"
+            "warnings.warn_explicit('urllib3 v2 only supports OpenSSL 1.1.1+, currently "
+            "the ssl module is compiled with LibreSSL 2.8.3', UserWarning, "
+            "'urllib3/__init__.py', 35, module='urllib3')\n"
+        )
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "PYTHONWARNINGS"}
+        proc = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, env=env
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stderr == ""

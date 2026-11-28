@@ -293,20 +293,47 @@ def find_installed(
     return None
 
 
-def ollama_models_dir() -> Optional[Path]:
+def ollama_model_dirs() -> List[Path]:
     """
-    Where this machine's Ollama keeps models: ``$OLLAMA_MODELS``, else
-    ``~/.ollama/models``, else the Linux service location. First that exists.
+    Every place this machine's Ollama may keep models that exists:
+    ``$OLLAMA_MODELS``, ``~/.ollama/models`` and the Linux service location.
+    hai can't tell which one the running Ollama uses (a service ignores the
+    user's environment), so the disk check looks at all of them.
     """
     candidates = []
     if os.environ.get("OLLAMA_MODELS"):
         candidates.append(Path(os.environ["OLLAMA_MODELS"]).expanduser())
     candidates.append(Path.home() / ".ollama" / "models")
     candidates.append(Path("/usr/share/ollama/.ollama/models"))
+    seen, out = set(), []
     for path in candidates:
-        if path.is_dir():
-            return path
-    return None
+        if path.is_dir() and path not in seen:
+            seen.add(path)
+            out.append(path)
+    return out
+
+
+def ollama_models_dir() -> Optional[Path]:
+    """The first of :func:`ollama_model_dirs`, or None."""
+    dirs = ollama_model_dirs()
+    return dirs[0] if dirs else None
+
+
+def tightest_disk(dirs: List[Path]) -> Tuple[Optional[Path], Optional[int], Optional[int]]:
+    """
+    The directory in ``dirs`` whose disk has the least free space, with that
+    disk's (free, total). With no directory, the home disk. A download is only
+    allowed if it fits on every disk Ollama might be writing to.
+    """
+    best: Tuple[Optional[Path], Optional[int], Optional[int]] = (None, None, None)
+    for path in dirs:
+        free, total = disk_space(path)
+        if free is not None and (best[1] is None or free < best[1]):
+            best = (path, free, total)
+    if best[1] is None:
+        free, total = disk_space(dirs[0] if dirs else None)
+        best = (dirs[0] if dirs else None, free, total)
+    return best
 
 
 def disk_space(path: Optional[Path]) -> Tuple[Optional[int], Optional[int]]:
@@ -379,8 +406,7 @@ def detect_environment(base_url: str, model: str) -> ModelEnvironment:
         env.catalog_entry = None
     if local:
         env.ollama_binary = shutil.which("ollama")
-        env.models_dir = ollama_models_dir()
-        env.disk_free, env.disk_total = disk_space(env.models_dir)
+        env.models_dir, env.disk_free, env.disk_total = tightest_disk(ollama_model_dirs())
         env.ram_total = total_ram()
     return env
 
@@ -561,9 +587,11 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
         data = yaml.safe_load(original) if original.strip() else {}
         if not isinstance(data, dict):
             data = {}
-        providers = data.setdefault("providers", {}) or {}
+        # Copy both mappings: a YAML alias (``ollama: *shared``) would
+        # otherwise carry the new model into every provider sharing it.
+        providers = dict(data.get("providers") or {})
         data["providers"] = providers
-        ollama = providers.setdefault("ollama", {}) or {}
+        ollama = dict(providers.get("ollama") or {})
         providers["ollama"] = ollama
         old = ollama.get("model")
         ollama["model"] = name
@@ -573,7 +601,7 @@ def set_config_model(config_path: Path, name: str) -> Tuple[Optional[str], str]:
         _write_private(config_path.with_name(config_path.name + ".bak"), original)
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_private(config_path, new_text)
+    replace_private(config_path, new_text)
     return old, name
 
 
@@ -594,6 +622,40 @@ def _write_private(path: Path, text: str) -> None:
             os.close(fd)
 
 
+def replace_private(path: Path, text: str) -> None:
+    """
+    Replace ``path`` with ``text`` atomically: write a mode-600 file next to it,
+    flush it to disk, then rename it over the old one. If the disk fills up or
+    hai is stopped halfway, the old config is still there, whole. A symlinked
+    config (dotfiles) keeps its link; the file it points to is replaced.
+    """
+    target = Path(os.path.realpath(str(path)))
+    tmp = target.with_name(f".{target.name}.hai-tmp-{os.getpid()}")
+    try:
+        fd = os.open(
+            str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, stat.S_IRUSR | stat.S_IWUSR
+        )
+    except OSError:
+        _write_private(target, text)  # directory not writable: write in place
+        return
+    try:
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = -1
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(str(tmp), str(target))
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(str(tmp))
+        except OSError:
+            pass
+        raise
+
+
 def _only_model_changed(original: str, edited: str, name: str) -> bool:
     """True if ``edited`` parses and differs from ``original`` only in the model."""
     try:
@@ -604,8 +666,12 @@ def _only_model_changed(original: str, edited: str, name: str) -> bool:
     try:
         if after["providers"]["ollama"]["model"] != name:
             return False
+        # Copy before changing, so a YAML alias shared with another provider
+        # shows up as a second change (and the file is rewritten instead).
+        before["providers"] = dict(before["providers"])
+        before["providers"]["ollama"] = dict(before["providers"]["ollama"])
         before["providers"]["ollama"]["model"] = name
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, ValueError):
         return False
     return before == after
 

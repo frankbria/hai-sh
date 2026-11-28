@@ -43,10 +43,17 @@ Not yet published to PyPI.
 - When Ollama isn't installed or running, hai prints the official install
   command or `ollama serve`. It never runs them.
 - The setup wizard lists the catalog models, installed ones first, and offers
-  the download for the one you pick.
+  the download for the one you pick. If Ollama isn't running yet you can still
+  pick, and hai tells you the command to download it later.
+- `hai-model use` keeps a `config.yaml.bak`, keeps comments, and replaces the
+  config atomically with mode 600, so a full disk or a Ctrl+C can't leave it
+  half written. A symlinked config keeps its link.
+- With `hai --config FILE`, the commands hai suggests include the same
+  `--config FILE`.
 - Disk check before a download: refuses one that would leave less than 10% of
-  the disk free (capped at 20 GB, never below 2 GB), unless `--force`. Warns
-  when a model would use over 70% of RAM.
+  the disk free (capped at 20 GB, never below 2 GB), unless `--force`. It
+  checks every place Ollama may keep models and goes by the fullest disk.
+  Warns when a model would use over 70% of RAM.
 - CI runs the tests on Linux and macOS, Python 3.9 and 3.13, plus a job with
   the newest dependency versions.
 
@@ -55,6 +62,11 @@ Not yet published to PyPI.
 - The Ctrl+X Ctrl+H binding failed on every query when gum isn't installed:
   hai's "hai is thinking..." line was captured along with the JSON, so the
   shell couldn't parse the reply. `--suggest-only` now writes only the JSON.
+- The same binding failed on macOS's system Python 3.9, where urllib3 prints a
+  LibreSSL warning on every start. hai now hides that warning; in
+  `--suggest-only` it hides all Python warnings.
+- `hai setup` writes its config with mode 600 from the start (it may hold API
+  keys) instead of tightening the mode after writing.
 
 ## v0.1.4 (2026-02-16)
 

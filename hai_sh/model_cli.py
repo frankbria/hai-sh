@@ -14,6 +14,7 @@ official commands. Design: docs/design/model-management.md.
 from __future__ import annotations
 
 import argparse
+import shlex
 import sys
 from pathlib import Path
 from typing import List, Optional, TextIO
@@ -110,7 +111,25 @@ def _progress_printer(name: str, stream: TextIO):
     return show, done
 
 
-def run_pull(base_url: str, name: str, stream: Optional[TextIO] = None) -> bool:
+def hai_model_command(args: str, config_path: Optional[Path] = None) -> str:
+    """
+    A hai-model command line to show the user. With a config file other than
+    the default, it names that file, so the command acts on the same Ollama.
+    """
+    if config_path is not None:
+        from hai_sh.init import get_config_path
+
+        if Path(config_path).expanduser() != get_config_path():
+            return f"hai-model --config {shlex.quote(str(config_path))} {args}"
+    return f"hai-model {args}"
+
+
+def run_pull(
+    base_url: str,
+    name: str,
+    stream: Optional[TextIO] = None,
+    config_path: Optional[Path] = None,
+) -> bool:
     """Pull with a progress line on stderr. Returns True on success."""
     stream = stream or sys.stderr
     show, done = _progress_printer(name, stream)
@@ -119,7 +138,8 @@ def run_pull(base_url: str, name: str, stream: Optional[TextIO] = None) -> bool:
     except KeyboardInterrupt:
         done()
         print(
-            f"Download stopped. Run 'hai-model pull {name}' to resume where it left off.",
+            f"Download stopped. Run '{hai_model_command('pull ' + name, config_path)}' "
+            "to resume where it left off.",
             file=stream,
         )
         return False
@@ -138,6 +158,7 @@ def consented_pull(
     assume_yes: bool = False,
     force: bool = False,
     out: Optional[TextIO] = None,
+    config_path: Optional[Path] = None,
 ) -> bool:
     """
     Show the facts, check disk and memory, ask (default No) and pull.
@@ -168,12 +189,14 @@ def consented_pull(
 
     if not assume_yes:
         if not is_interactive():
-            print(f"Nothing downloaded. To download it, run: hai-model pull {name} --yes", file=out)
+            cmd = hai_model_command(f"pull {name} --yes", config_path)
+            print(f"Nothing downloaded. To download it, run: {cmd}", file=out)
             return False
         if ask("Download it now?", "yN") != "y":
-            print(f"Nothing downloaded. Later: hai-model pull {name}", file=out)
+            cmd = hai_model_command(f"pull {name}", config_path)
+            print(f"Nothing downloaded. Later: {cmd}", file=out)
             return False
-    return run_pull(env.base_url, name)
+    return run_pull(env.base_url, name, config_path=config_path)
 
 
 def _catalog_or_none() -> Optional[m.Catalog]:
@@ -258,7 +281,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 1
     if not env.model_installed:
         print()
-        print(f"To install it: hai-model pull {env.model}")
+        print(f"To install it: {hai_model_command('pull ' + env.model, config_path)}")
         return 1
     if m.same_model(env.model, m.OLD_DEFAULT_MODEL):
         notice = m.old_default_notice(env.model)
@@ -269,7 +292,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    config, _ = _load(args)
+    config, config_path = _load(args)
     oc = m.ollama_config(config)
     policy = m.effective_licence_policy(config)
     installed = m.list_installed(oc["base_url"])
@@ -303,7 +326,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         return 1
     if not installed:
         print("Installed: none yet")
-        print(f"  To install the default: hai-model pull {catalog.default.name}")
+        cmd = hai_model_command("pull " + catalog.default.name, config_path)
+        print(f"  To install the default: {cmd}")
         return 0
     print("Installed in Ollama:")
     rows = []
@@ -334,7 +358,7 @@ def _table(headers: tuple, rows: List[tuple]) -> None:
 
 
 def cmd_pull(args: argparse.Namespace) -> int:
-    config, _ = _load(args)
+    config, config_path = _load(args)
     oc = m.ollama_config(config)
     env = m.detect_environment(oc["base_url"], args.name)
     if not env.running:
@@ -344,7 +368,9 @@ def cmd_pull(args: argparse.Namespace) -> int:
     if env.model_installed:
         print(f"{args.name} is already installed.")
         return 0
-    return 0 if consented_pull(env, args.name, assume_yes=args.yes, force=args.force) else 1
+    return 0 if consented_pull(
+        env, args.name, assume_yes=args.yes, force=args.force, config_path=config_path
+    ) else 1
 
 
 def cmd_use(args: argparse.Namespace) -> int:
@@ -364,7 +390,9 @@ def cmd_use(args: argparse.Namespace) -> int:
             )
             return 1
         if not env.model_installed:
-            if not consented_pull(env, name, assume_yes=args.yes, force=args.force):
+            if not consented_pull(
+                env, name, assume_yes=args.yes, force=args.force, config_path=config_path
+            ):
                 print(f"Config not changed. To set it anyway: hai-model use {name} --no-pull")
                 return 1
 

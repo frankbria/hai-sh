@@ -93,7 +93,8 @@ class TestStatus:
     def test_model_missing(self, cfg, capsys):
         assert run(cfg, "status") == 1
         out = capsys.readouterr().out
-        assert "NOT installed" in out and "hai-model pull gemma4:e2b" in out
+        assert "NOT installed" in out
+        assert f"hai-model --config {cfg} pull gemma4:e2b" in out  # same config file
 
     def test_ollama_down_prints_start_or_install_hint(self, cfg, capsys, monkeypatch):
         cfg.write_text("providers:\n  ollama:\n    base_url: http://127.0.0.1:9\n")
@@ -166,7 +167,7 @@ class TestPull:
         fake.pullable.add("phi4-mini")
         no_terminal(monkeypatch)
         assert run(cfg, "pull", "phi4-mini") == 1
-        assert "hai-model pull phi4-mini --yes" in capsys.readouterr().out
+        assert f"hai-model --config {cfg} pull phi4-mini --yes" in capsys.readouterr().out
         assert fake.pull_requests == []
 
     def test_yes_flag_without_terminal(self, cfg, fake, monkeypatch, capsys):

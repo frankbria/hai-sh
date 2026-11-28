@@ -22,7 +22,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from hai_sh import models as m
-from hai_sh.model_cli import ask, consented_pull, is_interactive, model_facts, ollama_problem_lines
+from hai_sh.model_cli import (
+    ask,
+    consented_pull,
+    hai_model_command,
+    is_interactive,
+    model_facts,
+    ollama_problem_lines,
+)
 
 ProviderChoice = Tuple[Any, str]  # (provider instance, provider name)
 
@@ -66,16 +73,19 @@ def _download_size(model: str) -> str:
     return f" ({m.format_bytes(entry.download_bytes)} download)" if entry else ""
 
 
-def missing_model_hint(model: str) -> str:
+def missing_model_hint(model: str, config_path: Optional[Path] = None) -> str:
     """The command to run, with the download size when hai knows it."""
-    return f"To install it{_download_size(model)}, run: hai-model pull {model}"
+    return (
+        f"To install it{_download_size(model)}, run: "
+        f"{hai_model_command('pull ' + model, config_path)}"
+    )
 
 
-def missing_model_message(model: str) -> str:
+def missing_model_message(model: str, config_path: Optional[Path] = None) -> str:
     """One line for --suggest-only."""
     return (
         f"hai needs the model {model}, which is not installed in Ollama. "
-        f"{missing_model_hint(model)}"
+        f"{missing_model_hint(model, config_path)}"
     )
 
 
@@ -119,7 +129,7 @@ def missing_model_flow(
     if answer == "y":
         from hai_sh.model_cli import run_pull
 
-        if run_pull(env.base_url, model):
+        if run_pull(env.base_url, model, config_path=config_path):
             return _ollama_provider(config, model)
         return None
 
@@ -127,10 +137,10 @@ def missing_model_flow(
         picked = _pick_other(env, catalog, policy, exclude=model)
         if picked:
             env_other = m.detect_environment(oc["base_url"], picked)
-            if env_other.model_installed or consented_pull(env_other, picked):
+            if env_other.model_installed or consented_pull(env_other, picked, config_path=config_path):
                 _offer_default(picked, config_path)
                 return _ollama_provider(config, picked)
-        return _stop(model)
+        return _stop(model, config_path)
 
     # Declined: an installed catalog model, then a configured cloud provider.
     alternative = _installed_alternative(env, catalog, policy, exclude=model)
@@ -141,12 +151,12 @@ def missing_model_flow(
     cloud = offer_cloud(config)
     if cloud:
         return cloud
-    return _stop(model)
+    return _stop(model, config_path)
 
 
-def _stop(model: str) -> None:
-    print(f"Nothing changed. To install it later: hai-model pull {model}")
-    print("To see other models: hai-model list")
+def _stop(model: str, config_path: Optional[Path] = None) -> None:
+    print(f"Nothing changed. To install it later: {hai_model_command('pull ' + model, config_path)}")
+    print(f"To see other models: {hai_model_command('list', config_path)}")
 
 
 def _installed_alternative(
