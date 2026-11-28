@@ -23,6 +23,14 @@ except ImportError:
 DEFAULT_OLLAMA_MODEL = "gemma4:e2b"
 
 
+class OllamaModelNotFoundError(RuntimeError):
+    """The configured model is not installed in the local Ollama."""
+
+    def __init__(self, model: str):
+        self.model = model
+        super().__init__(f"Model '{model}' isn't installed in Ollama. Run: ollama pull {model}")
+
+
 class OllamaProvider(BaseLLMProvider):
     """
     Ollama local model provider implementation.
@@ -185,6 +193,11 @@ class OllamaProvider(BaseLLMProvider):
                     url, json=payload, timeout=self.timeout, stream=self.stream
                 )
 
+            # A model that was never pulled comes back as a 404. Say exactly
+            # how to fix it rather than surfacing a bare HTTP error.
+            if self._model_missing(response):
+                raise OllamaModelNotFoundError(self.model)
+
             # Check for HTTP errors
             response.raise_for_status()
 
@@ -194,6 +207,8 @@ class OllamaProvider(BaseLLMProvider):
             else:
                 return self._handle_non_streaming_response(response)
 
+        except OllamaModelNotFoundError:
+            raise
         except requests.exceptions.ConnectionError as e:
             raise RuntimeError(
                 f"Cannot connect to Ollama at {self.base_url}. " f"Is Ollama running? Error: {e}"
@@ -206,6 +221,17 @@ class OllamaProvider(BaseLLMProvider):
             raise RuntimeError(f"Ollama request failed: {e}")
         except Exception as e:
             raise RuntimeError(f"Unexpected error calling Ollama: {e}")
+
+    @staticmethod
+    def _model_missing(response: Any) -> bool:
+        """True if Ollama answered that the requested model is not installed."""
+        if getattr(response, "status_code", None) != 404:
+            return False
+        try:
+            body = response.text or ""
+        except Exception:
+            return False
+        return "not found" in body.lower()
 
     @staticmethod
     def _rejects_think(response: Any, payload: dict[str, Any]) -> bool:

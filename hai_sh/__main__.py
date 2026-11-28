@@ -8,7 +8,7 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from hai_sh import __version__, init_hai_directory
 from hai_sh.app_mode import is_app_mode, run_app_mode
@@ -22,6 +22,7 @@ from hai_sh.prompt import build_system_prompt, generate_with_retry, collect_cont
 from hai_sh.executor import execute_command
 from hai_sh import gum
 from hai_sh.memory import MemoryManager
+from hai_sh.providers.ollama import OllamaModelNotFoundError
 from hai_sh.output import should_use_color
 from hai_sh.schema import validate_config_dict
 
@@ -236,17 +237,19 @@ def handle_config_error(error: str):
     )
 
 
-def handle_provider_error(error: str):
+def handle_provider_error(error: str, suggestion: Optional[str] = None):
     """
     Handle LLM provider errors.
 
     Args:
         error: Error message
+        suggestion: What the user should do; defaults to checking the config
     """
     print_error(
         "Provider Error",
         error,
-        "Check your API keys and provider configuration in ~/.hai/config.yaml"
+        suggestion
+        or "Check your API keys and provider configuration in ~/.hai/config.yaml"
     )
 
 
@@ -833,6 +836,12 @@ def main():
                 system_prompt=system_prompt,
             )
 
+        except OllamaModelNotFoundError as e:
+            handle_provider_error(
+                f"Model '{e.model}' isn't installed in Ollama.",
+                f"Run: ollama pull {e.model}",
+            )
+            return 1
         except Exception as e:
             handle_provider_error(f"Failed to generate command: {e}")
             return 1

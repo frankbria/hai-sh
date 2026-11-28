@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 import pytest
 import requests
 
-from hai_sh.providers.ollama import OllamaProvider, REQUESTS_AVAILABLE
+from hai_sh.providers.ollama import OllamaModelNotFoundError, OllamaProvider, REQUESTS_AVAILABLE
 
 
 # Skip all tests if requests is not installed
@@ -802,3 +802,35 @@ def test_generate_does_not_retry_other_400s(mock_post):
     with pytest.raises(RuntimeError):
         provider.generate("list files")
     assert mock_post.call_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("stream", [False, True])
+@patch("hai_sh.providers.ollama.requests.post")
+def test_generate_missing_model_names_the_pull_command(mock_post, stream):
+    """A model that was never pulled gets a fix-it message, not a bare 404."""
+    mock_post.return_value = _http_response(404, '{"error":"model \'gemma4:e2b\' not found"}')
+    provider = OllamaProvider({"model": "gemma4:e2b", "stream": stream})
+
+    with pytest.raises(OllamaModelNotFoundError) as exc:
+        provider.generate("list files")
+
+    assert exc.value.model == "gemma4:e2b"
+    assert "ollama pull gemma4:e2b" in str(exc.value)
+    # Still a RuntimeError, so existing callers keep working.
+    assert isinstance(exc.value, RuntimeError)
+    assert mock_post.call_count == 1
+
+
+@pytest.mark.unit
+@patch("hai_sh.providers.ollama.requests.post")
+def test_generate_other_404_stays_a_plain_http_error(mock_post):
+    """A 404 that is not about the model (e.g. wrong base_url path) is not misreported."""
+    mock_post.return_value = _http_response(404, "404 page")
+    provider = OllamaProvider({"model": "gemma4:e2b", "stream": False})
+
+    with pytest.raises(RuntimeError) as exc:
+        provider.generate("list files")
+
+    assert not isinstance(exc.value, OllamaModelNotFoundError)
+    assert "Ollama HTTP error" in str(exc.value)
