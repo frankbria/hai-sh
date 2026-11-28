@@ -408,11 +408,21 @@ def _config_text(args: argparse.Namespace) -> Optional[str]:
 
 
 def cmd_use(args: argparse.Namespace) -> int:
+    # The text before and after _load must match, so the settings used below
+    # and the snapshot are the same version of the file. (_load may create a
+    # default config when there was none; that counts as the starting point.)
+    # If the file changes later (say, base_url during a long download), the
+    # edit below stops instead of mixing old and new settings.
+    first = _config_text(args)
     config, config_path = _load(args)
-    # Read after _load, which may have just created a default config. If the
-    # file changes after this (say, base_url during a long download), the edit
-    # below stops instead of mixing old and new settings.
     before = _config_text(args)
+    if first and first != before:
+        print(
+            f"Config not changed: {config_path} changed while hai was reading it. "
+            "Run the command again.",
+            file=sys.stderr,
+        )
+        return 1
     oc = m.ollama_config(config)
     name = args.name.strip()
     if not name:

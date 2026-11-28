@@ -41,8 +41,9 @@ Not yet published to PyPI.
   terminal, then another installed model, then a cloud provider you have
   already configured (for that one question, after a privacy note), also
   after "see other models" if you cancel there. From the
-  Ctrl+X Ctrl+H binding it returns a message with the command to run; in a
-  pipe it prints the command and exits 1. It never downloads without a yes.
+  Ctrl+X Ctrl+H binding (`--suggest-only`) it returns the usual JSON with an
+  empty `command`, a message with the command to run, and exit status 0
+  (v0.1.4 exited 1 with an error); in a pipe it prints the command and exits 1. It never downloads without a yes.
 - When Ollama isn't installed or running, hai prints the official install
   command or `ollama serve`. It never runs them.
 - The setup wizard lists the catalog models, installed ones first, and offers

@@ -363,7 +363,9 @@ def tightest_disk(dirs: List[Path]) -> Tuple[Optional[Path], Optional[int], Opti
         elif os.environ.get("OLLAMA_MODELS"):
             target = Path(os.environ["OLLAMA_MODELS"]).expanduser()
         else:
-            target = None
+            # disk_space walks up to the nearest folder that exists, so an
+            # existing ~/.ollama on its own mount is the one measured.
+            target = Path.home() / ".ollama" / "models"
         free, total = disk_space(target)
         best = (dirs[0] if dirs else None, free, total)
     return best
@@ -675,6 +677,13 @@ def set_config_model(
         new_text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
 
     if config_path.exists():
+        # Check before touching the backup too, so a refused edit also keeps
+        # the previous .bak.
+        if config_path.read_text() != original:
+            raise ConfigWriteError(
+                f"{config_path} changed while hai was updating it. Nothing was "
+                "changed; run the command again."
+            )
         # Replace the backup itself, even if it is a symlink: never write
         # through it into whatever file it points to.
         replace_private(backup_path, original, follow_symlink=False)

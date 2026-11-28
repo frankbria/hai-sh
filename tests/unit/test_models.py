@@ -619,9 +619,7 @@ class TestSecondReviewFixes:
         import os
 
         env = {k: v for k, v in os.environ.items() if k != "PYTHONWARNINGS"}
-        proc = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True, env=env
-        )
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
         assert proc.returncode == 0, proc.stderr
         assert proc.stderr == ""
 
@@ -786,3 +784,42 @@ class TestEighthReviewFixes:
     def test_tags_with_models_not_a_list_is_unreadable(self, monkeypatch):
         monkeypatch.setattr(m, "_get_json", lambda url, **k: {"models": 1})
         assert m.list_installed("http://x") is None
+
+
+class TestEleventhReviewFixes:
+    def test_first_pull_measures_an_existing_dot_ollama_folder(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("OLLAMA_MODELS", raising=False)
+        (tmp_path / ".ollama").mkdir()  # could be its own mount
+        seen = []
+        real = m.shutil.disk_usage
+
+        def usage(path):
+            seen.append(path)
+            return real(path)
+
+        monkeypatch.setattr(m.shutil, "disk_usage", usage)
+        m.tightest_disk([])
+        assert seen == [str(tmp_path / ".ollama")]
+
+    def test_refused_edit_keeps_the_previous_backup(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        bak = tmp_path / "config.yaml.bak"
+        cfg.write_text("providers:\n  ollama:\n    model: a\n")
+        bak.write_text("the old backup\n")
+        real_read = Path.read_text
+        calls = {"n": 0}
+
+        def read_text(self, *a, **k):
+            text = real_read(self, *a, **k)
+            if self == cfg:
+                calls["n"] += 1
+                if calls["n"] == 2:  # an editor saved between hai's reads
+                    return text + "# edited\n"
+            return text
+
+        monkeypatch.setattr(Path, "read_text", read_text)
+        with pytest.raises(m.ConfigWriteError):
+            m.set_config_model(cfg, "b")
+        assert real_read(bak) == "the old backup\n"
+        assert "model: a" in real_read(cfg)
